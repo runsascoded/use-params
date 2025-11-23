@@ -20,25 +20,38 @@ export type Param<T> = {
 
 /**
  * Serialize query parameters to URL string.
- * Handles valueless params (empty string → ?key without =)
+ * Uses URLSearchParams for proper form-urlencoded format (space → +)
+ * Handles valueless params (empty string → ?key without =) manually
  */
 export function serializeParams(params: Record<string, Encoded>): string {
-  const parts: string[] = []
+  const searchParams = new URLSearchParams()
 
   for (const [key, value] of Object.entries(params)) {
     if (value === undefined) {
       // Skip undefined values
       continue
     } else if (value === '') {
-      // Valueless param: ?key
-      parts.push(encodeURIComponent(key))
+      // Valueless param: ?key without =
+      // URLSearchParams doesn't support this, so we'll handle manually
+      continue
     } else {
-      // Param with value: ?key=value
-      parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+      searchParams.set(key, value)
     }
   }
 
-  return parts.join('&')
+  let result = searchParams.toString()
+
+  // Handle valueless params manually
+  const valuelessKeys = Object.entries(params)
+    .filter(([_, value]) => value === '')
+    .map(([key, _]) => encodeURIComponent(key))
+
+  if (valuelessKeys.length > 0) {
+    const valuelessPart = valuelessKeys.join('&')
+    result = result ? `${result}&${valuelessPart}` : valuelessPart
+  }
+
+  return result
 }
 
 /**

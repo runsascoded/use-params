@@ -2,9 +2,15 @@
  * React hook for managing URL query parameters
  */
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { Param } from './index.js'
 import { getCurrentParams, parseParams, serializeParams } from './index.js'
+
+/**
+ * Cached snapshot to prevent infinite loops in useSyncExternalStore
+ */
+let cachedSnapshot: Record<string, string | undefined> | null = null
+let cachedSearch: string | null = null
 
 /**
  * Subscribe to URL changes (popstate events)
@@ -18,9 +24,22 @@ function subscribeToUrl(callback: () => void): () => void {
 
 /**
  * Get current URL search params as a snapshot
+ * Returns cached snapshot if URL hasn't changed
  */
 function getUrlSnapshot(): Record<string, string | undefined> {
-  return getCurrentParams()
+  if (typeof window === 'undefined') return {}
+
+  const search = window.location.search
+
+  // Return cached snapshot if URL hasn't changed
+  if (cachedSearch === search && cachedSnapshot !== null) {
+    return cachedSnapshot
+  }
+
+  // URL changed, parse and cache new snapshot
+  cachedSearch = search
+  cachedSnapshot = getCurrentParams()
+  return cachedSnapshot
 }
 
 /**
@@ -49,6 +68,10 @@ export function useUrlParam<T>(
   param: Param<T>,
   push = false
 ): [T, (value: T) => void] {
+  // Use ref to avoid recreating setValue when param changes
+  const paramRef = useRef(param)
+  paramRef.current = param
+
   // Subscribe to URL changes
   const urlParams = useSyncExternalStore(
     subscribeToUrl,
@@ -65,7 +88,7 @@ export function useUrlParam<T>(
       if (typeof window === 'undefined') return
 
       const currentParams = getCurrentParams()
-      const encoded = param.encode(newValue)
+      const encoded = paramRef.current.encode(newValue)
 
       // Update this parameter
       if (encoded === undefined) {
@@ -84,7 +107,7 @@ export function useUrlParam<T>(
       // Trigger popstate event to notify other hooks
       window.dispatchEvent(new PopStateEvent('popstate'))
     },
-    [key, param, push]
+    [key, push]
   )
 
   return [value, setValue]
