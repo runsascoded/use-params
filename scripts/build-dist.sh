@@ -27,7 +27,7 @@ fi
 
 # Remove everything except dist/
 git rm -rf . 2>/dev/null || true
-git clean -fdx -e dist -e node_modules -e package.json.dist
+git clean -fdx -e dist -e package.json.dist
 
 # Move dist contents to root
 mv dist/* . 2>/dev/null || true
