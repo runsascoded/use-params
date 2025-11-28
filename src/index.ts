@@ -2,6 +2,17 @@
  * Core types and utilities for URL parameter management
  */
 
+// Re-export core types and strategies
+export type { MultiEncoded, LocationStrategy } from './core.js'
+export {
+  parseMultiParams,
+  serializeMultiParams,
+  queryStrategy,
+  hashStrategy,
+  getDefaultStrategy,
+  setDefaultStrategy,
+} from './core.js'
+
 /**
  * Encodes a value to a URL query parameter string.
  * - undefined: parameter not present in URL
@@ -22,6 +33,8 @@ export type Param<T> = {
  * Serialize query parameters to URL string.
  * Uses URLSearchParams for proper form-urlencoded format (space → +)
  * Handles valueless params (empty string → ?key without =) manually
+ *
+ * @deprecated For multi-value support, use serializeMultiParams instead
  */
 export function serializeParams(params: Record<string, Encoded>): string {
   const searchParams = new URLSearchParams()
@@ -57,6 +70,9 @@ export function serializeParams(params: Record<string, Encoded>): string {
 /**
  * Parse query parameters from URL string or URLSearchParams.
  * Note: URLSearchParams treats ?z and ?z= identically (both as empty string).
+ * Note: For repeated params, only the first value is returned.
+ *
+ * @deprecated For multi-value support, use parseMultiParams instead
  */
 export function parseParams(source: string | URLSearchParams): Record<string, Encoded> {
   const searchParams = typeof source === 'string'
@@ -66,7 +82,10 @@ export function parseParams(source: string | URLSearchParams): Record<string, En
   const result: Record<string, Encoded> = {}
 
   for (const [key, value] of searchParams.entries()) {
-    result[key] = value
+    // Only take first value for each key (backward compat)
+    if (!(key in result)) {
+      result[key] = value
+    }
   }
 
   return result
@@ -97,4 +116,5 @@ export function updateUrl(params: Record<string, Encoded>, push = false): void {
 }
 
 export * from './params.js'
+export * from './multiParams.js'
 export * from './useUrlParam.js'

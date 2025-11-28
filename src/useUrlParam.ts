@@ -1,52 +1,60 @@
 /**
- * React hook for managing URL query parameters
+ * React hooks for managing URL parameters
  */
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useRef, useSyncExternalStore } from 'react'
 import type { Param } from './index.js'
-import { getCurrentParams, parseParams, serializeParams } from './index.js'
+import type { LocationStrategy, MultiEncoded } from './core.js'
+import { getDefaultStrategy, serializeMultiParams } from './core.js'
+import type { MultiParam } from './multiParams.js'
 
 /**
  * Cached snapshot to prevent infinite loops in useSyncExternalStore
+ * Keyed by strategy (so query and hash don't share cache)
  */
-let cachedSnapshot: Record<string, string | undefined> | null = null
-let cachedSearch: string | null = null
+const snapshotCache = new WeakMap<LocationStrategy, {
+  raw: string
+  snapshot: Record<string, MultiEncoded>
+}>()
 
 /**
- * Subscribe to URL changes (popstate events)
- */
-function subscribeToUrl(callback: () => void): () => void {
-  if (typeof window === 'undefined') return () => {}
-
-  window.addEventListener('popstate', callback)
-  return () => window.removeEventListener('popstate', callback)
-}
-
-/**
- * Get current URL search params as a snapshot
+ * Get URL snapshot for a given strategy
  * Returns cached snapshot if URL hasn't changed
  */
-function getUrlSnapshot(): Record<string, string | undefined> {
-  if (typeof window === 'undefined') return {}
+function getSnapshot(strategy: LocationStrategy): Record<string, MultiEncoded> {
+  const raw = strategy.getRaw()
+  const cached = snapshotCache.get(strategy)
 
-  const search = window.location.search
-
-  // Return cached snapshot if URL hasn't changed
-  if (cachedSearch === search && cachedSnapshot !== null) {
-    return cachedSnapshot
+  if (cached && cached.raw === raw) {
+    return cached.snapshot
   }
 
-  // URL changed, parse and cache new snapshot
-  cachedSearch = search
-  cachedSnapshot = getCurrentParams()
-  return cachedSnapshot
+  const snapshot = strategy.parse()
+  snapshotCache.set(strategy, { raw, snapshot })
+  return snapshot
 }
 
 /**
  * Server-side snapshot (always empty)
  */
-function getServerSnapshot(): Record<string, string | undefined> {
+function getServerSnapshot(): Record<string, MultiEncoded> {
   return {}
+}
+
+/**
+ * Convert single-value Encoded to multi-value MultiEncoded
+ */
+function singleToMulti(encoded: string | undefined): MultiEncoded {
+  if (encoded === undefined) return []
+  return [encoded]
+}
+
+/**
+ * Convert multi-value MultiEncoded to single-value Encoded
+ */
+function multiToSingle(multi: MultiEncoded): string | undefined {
+  if (multi.length === 0) return undefined
+  return multi[0]
 }
 
 /**
@@ -59,7 +67,7 @@ function getServerSnapshot(): Record<string, string | undefined> {
  *
  * @example
  * ```tsx
- * const [zoom, setZoom] = useUrlParam('z', boolParam())
+ * const [zoom, setZoom] = useUrlParam('z', boolParam)
  * const [device, setDevice] = useUrlParam('d', stringParam('default'))
  * ```
  */
@@ -68,21 +76,23 @@ export function useUrlParam<T>(
   param: Param<T>,
   push = false
 ): [T, (value: T) => void] {
+  const strategy = getDefaultStrategy()
+
   // Use ref to avoid recreating setValue when param changes
   const paramRef = useRef(param)
   paramRef.current = param
 
   // Subscribe to URL changes
   const urlParams = useSyncExternalStore(
-    subscribeToUrl,
-    getUrlSnapshot,
+    (cb) => strategy.subscribe(cb),
+    () => getSnapshot(strategy),
     getServerSnapshot
   )
 
   // Memoize decoded value based on encoded string AND param identity
   // Re-decode if either the URL param string changes OR the param object changes
   // (e.g., deviceIdsParam depends on devices array which loads asynchronously)
-  const encoded = urlParams[key]
+  const encoded = multiToSingle(urlParams[key] ?? [])
   const cacheRef = useRef<{ encoded: typeof encoded; param: Param<T>; decoded: T } | null>(null)
 
   if (cacheRef.current === null || cacheRef.current.encoded !== encoded || cacheRef.current.param !== param) {
@@ -95,27 +105,27 @@ export function useUrlParam<T>(
     (newValue: T) => {
       if (typeof window === 'undefined') return
 
-      const currentParams = getCurrentParams()
+      const currentParams = strategy.parse()
       const encoded = paramRef.current.encode(newValue)
 
-      // Update this parameter
+      // Update this parameter (single → multi)
       if (encoded === undefined) {
         delete currentParams[key]
       } else {
-        currentParams[key] = encoded
+        currentParams[key] = [encoded]
       }
 
-      // Serialize and update URL
+      // Build and update URL
       const url = new URL(window.location.href)
-      url.search = serializeParams(currentParams)
+      const newUrl = strategy.buildUrl(url, currentParams)
 
       const method = push ? 'pushState' : 'replaceState'
-      window.history[method]({}, '', url.toString())
+      window.history[method]({}, '', newUrl)
 
-      // Trigger popstate event to notify other hooks
+      // Trigger events to notify other hooks
       window.dispatchEvent(new PopStateEvent('popstate'))
     },
-    [key, push]
+    [key, push, strategy]
   )
 
   return [value, setValue]
@@ -132,7 +142,7 @@ export function useUrlParam<T>(
  * @example
  * ```tsx
  * const { values, setValues } = useUrlParams({
- *   zoom: boolParam(),
+ *   zoom: boolParam,
  *   device: stringParam('default'),
  *   count: intParam(10)
  * })
@@ -148,10 +158,12 @@ export function useUrlParams<P extends Record<string, Param<any>>>(
   values: { [K in keyof P]: P[K] extends Param<infer T> ? T : never }
   setValues: (updates: Partial<{ [K in keyof P]: P[K] extends Param<infer T> ? T : never }>) => void
 } {
+  const strategy = getDefaultStrategy()
+
   // Subscribe to URL changes
   const urlParams = useSyncExternalStore(
-    subscribeToUrl,
-    getUrlSnapshot,
+    (cb) => strategy.subscribe(cb),
+    () => getSnapshot(strategy),
     getServerSnapshot
   )
 
@@ -159,7 +171,7 @@ export function useUrlParams<P extends Record<string, Param<any>>>(
   const values = Object.fromEntries(
     Object.entries(params).map(([key, param]) => [
       key,
-      param.decode(urlParams[key])
+      param.decode(multiToSingle(urlParams[key] ?? []))
     ])
   ) as { [K in keyof P]: P[K] extends Param<infer T> ? T : never }
 
@@ -168,7 +180,7 @@ export function useUrlParams<P extends Record<string, Param<any>>>(
     (updates: Partial<{ [K in keyof P]: P[K] extends Param<infer T> ? T : never }>) => {
       if (typeof window === 'undefined') return
 
-      const currentParams = getCurrentParams()
+      const currentParams = strategy.parse()
 
       // Apply all updates
       for (const [key, value] of Object.entries(updates)) {
@@ -179,21 +191,167 @@ export function useUrlParams<P extends Record<string, Param<any>>>(
         if (encoded === undefined) {
           delete currentParams[key]
         } else {
+          currentParams[key] = [encoded]
+        }
+      }
+
+      // Build and update URL once
+      const url = new URL(window.location.href)
+      const newUrl = strategy.buildUrl(url, currentParams)
+
+      const method = push ? 'pushState' : 'replaceState'
+      window.history[method]({}, '', newUrl)
+
+      // Trigger events to notify other hooks
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    },
+    [params, push, strategy]
+  )
+
+  return { values, setValues }
+}
+
+/**
+ * React hook for managing a single multi-value URL parameter.
+ * Supports repeated params like ?tag=a&tag=b&tag=c
+ *
+ * @param key - Query parameter key
+ * @param param - MultiParam encoder/decoder
+ * @param push - Use pushState (true) or replaceState (false) when updating
+ * @returns Tuple of [value, setValue]
+ *
+ * @example
+ * ```tsx
+ * const [tags, setTags] = useMultiUrlParam('tag', multiStringParam())
+ * // URL: ?tag=a&tag=b → tags = ['a', 'b']
+ * ```
+ */
+export function useMultiUrlParam<T>(
+  key: string,
+  param: MultiParam<T>,
+  push = false
+): [T, (value: T) => void] {
+  const strategy = getDefaultStrategy()
+
+  // Use ref to avoid recreating setValue when param changes
+  const paramRef = useRef(param)
+  paramRef.current = param
+
+  // Subscribe to URL changes
+  const urlParams = useSyncExternalStore(
+    (cb) => strategy.subscribe(cb),
+    () => getSnapshot(strategy),
+    getServerSnapshot
+  )
+
+  // Decode current value from URL
+  const value = param.decode(urlParams[key] ?? [])
+
+  // Update URL when value changes
+  const setValue = useCallback(
+    (newValue: T) => {
+      if (typeof window === 'undefined') return
+
+      const currentParams = strategy.parse()
+      const encoded = paramRef.current.encode(newValue)
+
+      // Update this parameter
+      if (encoded.length === 0) {
+        delete currentParams[key]
+      } else {
+        currentParams[key] = encoded
+      }
+
+      // Build and update URL
+      const url = new URL(window.location.href)
+      const newUrl = strategy.buildUrl(url, currentParams)
+
+      const method = push ? 'pushState' : 'replaceState'
+      window.history[method]({}, '', newUrl)
+
+      // Trigger events to notify other hooks
+      window.dispatchEvent(new PopStateEvent('popstate'))
+    },
+    [key, push, strategy]
+  )
+
+  return [value, setValue]
+}
+
+/**
+ * React hook for managing multiple multi-value URL parameters together.
+ * Updates are batched into a single history entry.
+ *
+ * @param params - Object mapping keys to MultiParam types
+ * @param push - Use pushState (true) or replaceState (false) when updating
+ * @returns Object with decoded values and update function
+ *
+ * @example
+ * ```tsx
+ * const { values, setValues } = useMultiUrlParams({
+ *   tags: multiStringParam(),
+ *   ids: multiIntParam()
+ * })
+ *
+ * // Update multiple multi-value params at once
+ * setValues({ tags: ['a', 'b'], ids: [1, 2, 3] })
+ * ```
+ */
+export function useMultiUrlParams<P extends Record<string, MultiParam<any>>>(
+  params: P,
+  push = false
+): {
+  values: { [K in keyof P]: P[K] extends MultiParam<infer T> ? T : never }
+  setValues: (updates: Partial<{ [K in keyof P]: P[K] extends MultiParam<infer T> ? T : never }>) => void
+} {
+  const strategy = getDefaultStrategy()
+
+  // Subscribe to URL changes
+  const urlParams = useSyncExternalStore(
+    (cb) => strategy.subscribe(cb),
+    () => getSnapshot(strategy),
+    getServerSnapshot
+  )
+
+  // Decode all values from URL
+  const values = Object.fromEntries(
+    Object.entries(params).map(([key, param]) => [
+      key,
+      param.decode(urlParams[key] ?? [])
+    ])
+  ) as { [K in keyof P]: P[K] extends MultiParam<infer T> ? T : never }
+
+  // Update multiple parameters at once
+  const setValues = useCallback(
+    (updates: Partial<{ [K in keyof P]: P[K] extends MultiParam<infer T> ? T : never }>) => {
+      if (typeof window === 'undefined') return
+
+      const currentParams = strategy.parse()
+
+      // Apply all updates
+      for (const [key, value] of Object.entries(updates)) {
+        const param = params[key]
+        if (!param) continue
+
+        const encoded = param.encode(value)
+        if (encoded.length === 0) {
+          delete currentParams[key]
+        } else {
           currentParams[key] = encoded
         }
       }
 
-      // Serialize and update URL once
+      // Build and update URL once
       const url = new URL(window.location.href)
-      url.search = serializeParams(currentParams)
+      const newUrl = strategy.buildUrl(url, currentParams)
 
       const method = push ? 'pushState' : 'replaceState'
-      window.history[method]({}, '', url.toString())
+      window.history[method]({}, '', newUrl)
 
-      // Trigger popstate event to notify other hooks
+      // Trigger events to notify other hooks
       window.dispatchEvent(new PopStateEvent('popstate'))
     },
-    [params, push]
+    [params, push, strategy]
   )
 
   return { values, setValues }
