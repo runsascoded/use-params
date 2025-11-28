@@ -198,6 +198,20 @@ type Param<T> = {
 - `getCurrentParams()`: Get current URL params (browser only)
 - `updateUrl(params, push?)`: Update URL without reloading (browser only)
 
+## Examples
+
+Projects using `@rdub/use-url-params`:
+
+- [runsascoded/awair] – Air quality dashboard with URL-persisted chart settings
+
+  Example: [`awair.runsascoded.com/?d=+br&y=thZ&t=-3d`][awair-example]
+  - `d=+br`: show default device + "bedroom" (`+` encodes space, leading space means "include default")
+  - `y=thZ`: left axis = temp (`t`), right axis = humidity (`h`), Y-axes don't start from zero (`Z`)
+  - `t=-3d`: time range = last 3 days
+
+[runsascoded/awair]: https://github.com/runsascoded/awair
+[awair-example]: https://awair.runsascoded.com/?d=+br&y=thZ&t=-3d
+
 ## License
 
 MIT
