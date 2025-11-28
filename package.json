@@ -1,6 +1,6 @@
 {
   "name": "@rdub/use-url-params",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Type-safe URL query parameter management with minimal, human-readable encoding",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -33,6 +33,10 @@
   ],
   "author": "Ryan Williams",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/runsascoded/use-url-params"
+  },
   "devDependencies": {
     "@types/react": "^18.3.18",
     "react": "^18.3.1",

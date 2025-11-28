@@ -1,5 +1,4 @@
 name: Build dist branch
-
 on:
   workflow_dispatch:
     inputs:
@@ -11,7 +10,6 @@ on:
         description: 'Name of dist branch'
         required: false
         default: 'dist'
-
 jobs:
   build-dist:
     runs-on: ubuntu-latest
