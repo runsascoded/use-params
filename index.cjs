@@ -115,8 +115,8 @@ function useUrlParam(key, param, push = false) {
   );
   const encoded = urlParams[key];
   const cacheRef = react.useRef(null);
-  if (cacheRef.current === null || cacheRef.current.encoded !== encoded) {
-    cacheRef.current = { encoded, decoded: param.decode(encoded) };
+  if (cacheRef.current === null || cacheRef.current.encoded !== encoded || cacheRef.current.param !== param) {
+    cacheRef.current = { encoded, param, decoded: param.decode(encoded) };
   }
   const value = cacheRef.current.decoded;
   const setValue = react.useCallback(
