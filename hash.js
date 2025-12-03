@@ -409,6 +409,9 @@ function updateUrl(params, push = false) {
   window.history[method]({}, "", url.toString());
 }
 
+// src/hash.ts
+setDefaultStrategy(hashStrategy);
+
 export { boolParam, defStringParam, enumParam, floatParam, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, numberArrayParam, optIntParam, parseMultiParams, parseParams, queryStrategy, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, updateUrl, useMultiUrlParam, useMultiUrlParams, useUrlParam, useUrlParams };
-//# sourceMappingURL=index.js.map
-//# sourceMappingURL=index.js.map
+//# sourceMappingURL=hash.js.map
+//# sourceMappingURL=hash.js.map

@@ -1,4 +1,57 @@
 /**
+ * Core multi-value operations and location strategies
+ */
+/**
+ * Multi-value encoded representation
+ * An array of strings representing multiple values for a single URL parameter key
+ */
+type MultiEncoded = string[];
+/**
+ * Location strategy interface for abstracting URL storage location
+ * (query string vs hash fragment)
+ */
+interface LocationStrategy {
+    /** Get raw string from location (for caching comparison) */
+    getRaw(): string;
+    /** Parse current location to multi-value params */
+    parse(): Record<string, MultiEncoded>;
+    /** Build URL string with updated params */
+    buildUrl(base: URL, params: Record<string, MultiEncoded>): string;
+    /** Subscribe to location changes, returns unsubscribe function */
+    subscribe(callback: () => void): () => void;
+}
+/**
+ * Parse URL string to multi-value params
+ * Each key maps to an array of all values for that key
+ */
+declare function parseMultiParams(source: string | URLSearchParams): Record<string, MultiEncoded>;
+/**
+ * Serialize multi-value params to URL string format
+ * Repeated keys are serialized as separate entries: key=a&key=b
+ */
+declare function serializeMultiParams(params: Record<string, MultiEncoded>): string;
+/**
+ * Query string location strategy
+ * Reads/writes to window.location.search
+ */
+declare const queryStrategy: LocationStrategy;
+/**
+ * Hash fragment location strategy
+ * Reads/writes to window.location.hash
+ * Hash is parsed as URLSearchParams format: #key=value&key2=value2
+ */
+declare const hashStrategy: LocationStrategy;
+/**
+ * Get the current default location strategy
+ */
+declare function getDefaultStrategy(): LocationStrategy;
+/**
+ * Set the default location strategy
+ * Called by entry points (e.g., hash.ts sets this to hashStrategy)
+ */
+declare function setDefaultStrategy(strategy: LocationStrategy): void;
+
+/**
  * Built-in parameter types with smart defaults and minimal encoding
  */
 
@@ -56,7 +109,48 @@ declare function stringsParam(init?: string[], delimiter?: string): Param<string
 declare function numberArrayParam(init?: number[]): Param<number[]>;
 
 /**
- * React hook for managing URL query parameters
+ * Multi-value parameter types for handling repeated URL params
+ * e.g., ?tag=a&tag=b&tag=c
+ */
+
+/**
+ * A bidirectional converter between a typed value and its multi-value URL representation.
+ * Similar to Param<T> but works with string[] instead of string | undefined.
+ */
+type MultiParam<T> = {
+    encode: (value: T) => MultiEncoded;
+    decode: (encoded: MultiEncoded) => T;
+};
+/**
+ * Multi-value string array parameter.
+ * Each string becomes a separate URL param with the same key.
+ *
+ * @example
+ * // ?tag=a&tag=b&tag=c → ['a', 'b', 'c']
+ * const [tags, setTags] = useMultiUrlParam('tag', multiStringParam())
+ */
+declare function multiStringParam(init?: string[]): MultiParam<string[]>;
+/**
+ * Multi-value integer array parameter.
+ * Each number becomes a separate URL param with the same key.
+ *
+ * @example
+ * // ?id=1&id=2&id=3 → [1, 2, 3]
+ * const [ids, setIds] = useMultiUrlParam('id', multiIntParam())
+ */
+declare function multiIntParam(init?: number[]): MultiParam<number[]>;
+/**
+ * Multi-value float array parameter.
+ * Each number becomes a separate URL param with the same key.
+ *
+ * @example
+ * // ?val=1.5&val=2.7 → [1.5, 2.7]
+ * const [vals, setVals] = useMultiUrlParam('val', multiFloatParam())
+ */
+declare function multiFloatParam(init?: number[]): MultiParam<number[]>;
+
+/**
+ * React hooks for managing URL parameters
  */
 
 /**
@@ -69,7 +163,7 @@ declare function numberArrayParam(init?: number[]): Param<number[]>;
  *
  * @example
  * ```tsx
- * const [zoom, setZoom] = useUrlParam('z', boolParam())
+ * const [zoom, setZoom] = useUrlParam('z', boolParam)
  * const [device, setDevice] = useUrlParam('d', stringParam('default'))
  * ```
  */
@@ -85,7 +179,7 @@ declare function useUrlParam<T>(key: string, param: Param<T>, push?: boolean): [
  * @example
  * ```tsx
  * const { values, setValues } = useUrlParams({
- *   zoom: boolParam(),
+ *   zoom: boolParam,
  *   device: stringParam('default'),
  *   count: intParam(10)
  * })
@@ -102,10 +196,54 @@ declare function useUrlParams<P extends Record<string, Param<any>>>(params: P, p
         [K in keyof P]: P[K] extends Param<infer T> ? T : never;
     }>) => void;
 };
+/**
+ * React hook for managing a single multi-value URL parameter.
+ * Supports repeated params like ?tag=a&tag=b&tag=c
+ *
+ * @param key - Query parameter key
+ * @param param - MultiParam encoder/decoder
+ * @param push - Use pushState (true) or replaceState (false) when updating
+ * @returns Tuple of [value, setValue]
+ *
+ * @example
+ * ```tsx
+ * const [tags, setTags] = useMultiUrlParam('tag', multiStringParam())
+ * // URL: ?tag=a&tag=b → tags = ['a', 'b']
+ * ```
+ */
+declare function useMultiUrlParam<T>(key: string, param: MultiParam<T>, push?: boolean): [T, (value: T) => void];
+/**
+ * React hook for managing multiple multi-value URL parameters together.
+ * Updates are batched into a single history entry.
+ *
+ * @param params - Object mapping keys to MultiParam types
+ * @param push - Use pushState (true) or replaceState (false) when updating
+ * @returns Object with decoded values and update function
+ *
+ * @example
+ * ```tsx
+ * const { values, setValues } = useMultiUrlParams({
+ *   tags: multiStringParam(),
+ *   ids: multiIntParam()
+ * })
+ *
+ * // Update multiple multi-value params at once
+ * setValues({ tags: ['a', 'b'], ids: [1, 2, 3] })
+ * ```
+ */
+declare function useMultiUrlParams<P extends Record<string, MultiParam<any>>>(params: P, push?: boolean): {
+    values: {
+        [K in keyof P]: P[K] extends MultiParam<infer T> ? T : never;
+    };
+    setValues: (updates: Partial<{
+        [K in keyof P]: P[K] extends MultiParam<infer T> ? T : never;
+    }>) => void;
+};
 
 /**
  * Core types and utilities for URL parameter management
  */
+
 /**
  * Encodes a value to a URL query parameter string.
  * - undefined: parameter not present in URL
@@ -124,11 +262,16 @@ type Param<T> = {
  * Serialize query parameters to URL string.
  * Uses URLSearchParams for proper form-urlencoded format (space → +)
  * Handles valueless params (empty string → ?key without =) manually
+ *
+ * @deprecated For multi-value support, use serializeMultiParams instead
  */
 declare function serializeParams(params: Record<string, Encoded>): string;
 /**
  * Parse query parameters from URL string or URLSearchParams.
  * Note: URLSearchParams treats ?z and ?z= identically (both as empty string).
+ * Note: For repeated params, only the first value is returned.
+ *
+ * @deprecated For multi-value support, use parseMultiParams instead
  */
 declare function parseParams(source: string | URLSearchParams): Record<string, Encoded>;
 /**
@@ -142,4 +285,4 @@ declare function getCurrentParams(): Record<string, Encoded>;
  */
 declare function updateUrl(params: Record<string, Encoded>, push?: boolean): void;
 
-export { type Encoded, type Param, boolParam, defStringParam, enumParam, floatParam, getCurrentParams, intParam, numberArrayParam, optIntParam, parseParams, serializeParams, stringParam, stringsParam, updateUrl, useUrlParam, useUrlParams };
+export { type Encoded, type LocationStrategy, type MultiEncoded, type MultiParam, type Param, boolParam, defStringParam, enumParam, floatParam, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, numberArrayParam, optIntParam, parseMultiParams, parseParams, queryStrategy, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, updateUrl, useMultiUrlParam, useMultiUrlParams, useUrlParam, useUrlParams };

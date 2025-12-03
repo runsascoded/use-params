@@ -1,4 +1,6 @@
-import { useRef, useSyncExternalStore, useCallback } from 'react';
+'use strict';
+
+var react = require('react');
 
 // src/core.ts
 function parseMultiParams(source) {
@@ -228,20 +230,20 @@ function multiToSingle(multi) {
 }
 function useUrlParam(key, param, push = false) {
   const strategy = getDefaultStrategy();
-  const paramRef = useRef(param);
+  const paramRef = react.useRef(param);
   paramRef.current = param;
-  const urlParams = useSyncExternalStore(
+  const urlParams = react.useSyncExternalStore(
     (cb) => strategy.subscribe(cb),
     () => getSnapshot(strategy),
     getServerSnapshot
   );
   const encoded = multiToSingle(urlParams[key] ?? []);
-  const cacheRef = useRef(null);
+  const cacheRef = react.useRef(null);
   if (cacheRef.current === null || cacheRef.current.encoded !== encoded || cacheRef.current.param !== param) {
     cacheRef.current = { encoded, param, decoded: param.decode(encoded) };
   }
   const value = cacheRef.current.decoded;
-  const setValue = useCallback(
+  const setValue = react.useCallback(
     (newValue) => {
       if (typeof window === "undefined") return;
       const currentParams = strategy.parse();
@@ -263,7 +265,7 @@ function useUrlParam(key, param, push = false) {
 }
 function useUrlParams(params, push = false) {
   const strategy = getDefaultStrategy();
-  const urlParams = useSyncExternalStore(
+  const urlParams = react.useSyncExternalStore(
     (cb) => strategy.subscribe(cb),
     () => getSnapshot(strategy),
     getServerSnapshot
@@ -274,7 +276,7 @@ function useUrlParams(params, push = false) {
       param.decode(multiToSingle(urlParams[key] ?? []))
     ])
   );
-  const setValues = useCallback(
+  const setValues = react.useCallback(
     (updates) => {
       if (typeof window === "undefined") return;
       const currentParams = strategy.parse();
@@ -300,15 +302,15 @@ function useUrlParams(params, push = false) {
 }
 function useMultiUrlParam(key, param, push = false) {
   const strategy = getDefaultStrategy();
-  const paramRef = useRef(param);
+  const paramRef = react.useRef(param);
   paramRef.current = param;
-  const urlParams = useSyncExternalStore(
+  const urlParams = react.useSyncExternalStore(
     (cb) => strategy.subscribe(cb),
     () => getSnapshot(strategy),
     getServerSnapshot
   );
   const value = param.decode(urlParams[key] ?? []);
-  const setValue = useCallback(
+  const setValue = react.useCallback(
     (newValue) => {
       if (typeof window === "undefined") return;
       const currentParams = strategy.parse();
@@ -330,7 +332,7 @@ function useMultiUrlParam(key, param, push = false) {
 }
 function useMultiUrlParams(params, push = false) {
   const strategy = getDefaultStrategy();
-  const urlParams = useSyncExternalStore(
+  const urlParams = react.useSyncExternalStore(
     (cb) => strategy.subscribe(cb),
     () => getSnapshot(strategy),
     getServerSnapshot
@@ -341,7 +343,7 @@ function useMultiUrlParams(params, push = false) {
       param.decode(urlParams[key] ?? [])
     ])
   );
-  const setValues = useCallback(
+  const setValues = react.useCallback(
     (updates) => {
       if (typeof window === "undefined") return;
       const currentParams = strategy.parse();
@@ -409,6 +411,34 @@ function updateUrl(params, push = false) {
   window.history[method]({}, "", url.toString());
 }
 
-export { boolParam, defStringParam, enumParam, floatParam, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, numberArrayParam, optIntParam, parseMultiParams, parseParams, queryStrategy, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, updateUrl, useMultiUrlParam, useMultiUrlParams, useUrlParam, useUrlParams };
-//# sourceMappingURL=index.js.map
-//# sourceMappingURL=index.js.map
+// src/hash.ts
+setDefaultStrategy(hashStrategy);
+
+exports.boolParam = boolParam;
+exports.defStringParam = defStringParam;
+exports.enumParam = enumParam;
+exports.floatParam = floatParam;
+exports.getCurrentParams = getCurrentParams;
+exports.getDefaultStrategy = getDefaultStrategy;
+exports.hashStrategy = hashStrategy;
+exports.intParam = intParam;
+exports.multiFloatParam = multiFloatParam;
+exports.multiIntParam = multiIntParam;
+exports.multiStringParam = multiStringParam;
+exports.numberArrayParam = numberArrayParam;
+exports.optIntParam = optIntParam;
+exports.parseMultiParams = parseMultiParams;
+exports.parseParams = parseParams;
+exports.queryStrategy = queryStrategy;
+exports.serializeMultiParams = serializeMultiParams;
+exports.serializeParams = serializeParams;
+exports.setDefaultStrategy = setDefaultStrategy;
+exports.stringParam = stringParam;
+exports.stringsParam = stringsParam;
+exports.updateUrl = updateUrl;
+exports.useMultiUrlParam = useMultiUrlParam;
+exports.useMultiUrlParams = useMultiUrlParams;
+exports.useUrlParam = useUrlParam;
+exports.useUrlParams = useUrlParams;
+//# sourceMappingURL=hash.cjs.map
+//# sourceMappingURL=hash.cjs.map
