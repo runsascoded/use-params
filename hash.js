@@ -164,6 +164,26 @@ function numberArrayParam(init = []) {
     }
   };
 }
+function paginationParam(defaultPageSize, validPageSizes) {
+  return {
+    encode: ({ offset, pageSize }) => {
+      if (offset === 0 && pageSize === defaultPageSize) return void 0;
+      if (offset === 0) return ` ${pageSize}`;
+      if (pageSize === defaultPageSize) return String(offset);
+      return `${offset} ${pageSize}`;
+    },
+    decode: (encoded) => {
+      if (!encoded) return { offset: 0, pageSize: defaultPageSize };
+      const parts = encoded.split(" ");
+      const offset = parts[0] === "" ? 0 : parseInt(parts[0], 10) || 0;
+      let pageSize = parts[1] ? parseInt(parts[1], 10) : defaultPageSize;
+      if (validPageSizes && !validPageSizes.includes(pageSize)) {
+        pageSize = defaultPageSize;
+      }
+      return { offset, pageSize };
+    }
+  };
+}
 
 // src/multiParams.ts
 function multiStringParam(init = []) {
@@ -412,6 +432,6 @@ function updateUrl(params, push = false) {
 // src/hash.ts
 setDefaultStrategy(hashStrategy);
 
-export { boolParam, defStringParam, enumParam, floatParam, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, numberArrayParam, optIntParam, parseMultiParams, parseParams, queryStrategy, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, updateUrl, useMultiUrlParam, useMultiUrlParams, useUrlParam, useUrlParams };
+export { boolParam, defStringParam, enumParam, floatParam, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, numberArrayParam, optIntParam, paginationParam, parseMultiParams, parseParams, queryStrategy, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, updateUrl, useMultiUrlParam, useMultiUrlParams, useUrlParam, useUrlParams };
 //# sourceMappingURL=hash.js.map
 //# sourceMappingURL=hash.js.map

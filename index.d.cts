@@ -107,6 +107,24 @@ declare function stringsParam(init?: string[], delimiter?: string): Param<string
  * Uses comma delimiter.
  */
 declare function numberArrayParam(init?: number[]): Param<number[]>;
+/**
+ * Pagination parameter combining offset and page size.
+ * Uses space (which encodes as + in URLs) as delimiter.
+ *
+ * Encoding rules:
+ * - offset=0, pageSize=default → not present (undefined)
+ * - offset=0, pageSize=custom → " pageSize" (e.g., " 20" → +20 in URL)
+ * - offset>0, pageSize=default → "offset" (e.g., "100")
+ * - offset>0, pageSize=custom → "offset pageSize" (e.g., "100 20" → 100+20 in URL)
+ *
+ * @param defaultPageSize - The default page size (omitted from URL when used)
+ * @param validPageSizes - Optional array of valid page sizes for validation
+ */
+type Pagination = {
+    offset: number;
+    pageSize: number;
+};
+declare function paginationParam(defaultPageSize: number, validPageSizes?: readonly number[]): Param<Pagination>;
 
 /**
  * Multi-value parameter types for handling repeated URL params
@@ -285,4 +303,4 @@ declare function getCurrentParams(): Record<string, Encoded>;
  */
 declare function updateUrl(params: Record<string, Encoded>, push?: boolean): void;
 
-export { type Encoded, type LocationStrategy, type MultiEncoded, type MultiParam, type Param, boolParam, defStringParam, enumParam, floatParam, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, numberArrayParam, optIntParam, parseMultiParams, parseParams, queryStrategy, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, updateUrl, useMultiUrlParam, useMultiUrlParams, useUrlParam, useUrlParams };
+export { type Encoded, type LocationStrategy, type MultiEncoded, type MultiParam, type Pagination, type Param, boolParam, defStringParam, enumParam, floatParam, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, numberArrayParam, optIntParam, paginationParam, parseMultiParams, parseParams, queryStrategy, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, updateUrl, useMultiUrlParam, useMultiUrlParams, useUrlParam, useUrlParams };

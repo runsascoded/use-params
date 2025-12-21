@@ -166,6 +166,26 @@ function numberArrayParam(init = []) {
     }
   };
 }
+function paginationParam(defaultPageSize, validPageSizes) {
+  return {
+    encode: ({ offset, pageSize }) => {
+      if (offset === 0 && pageSize === defaultPageSize) return void 0;
+      if (offset === 0) return ` ${pageSize}`;
+      if (pageSize === defaultPageSize) return String(offset);
+      return `${offset} ${pageSize}`;
+    },
+    decode: (encoded) => {
+      if (!encoded) return { offset: 0, pageSize: defaultPageSize };
+      const parts = encoded.split(" ");
+      const offset = parts[0] === "" ? 0 : parseInt(parts[0], 10) || 0;
+      let pageSize = parts[1] ? parseInt(parts[1], 10) : defaultPageSize;
+      if (validPageSizes && !validPageSizes.includes(pageSize)) {
+        pageSize = defaultPageSize;
+      }
+      return { offset, pageSize };
+    }
+  };
+}
 
 // src/multiParams.ts
 function multiStringParam(init = []) {
@@ -424,6 +444,7 @@ exports.multiIntParam = multiIntParam;
 exports.multiStringParam = multiStringParam;
 exports.numberArrayParam = numberArrayParam;
 exports.optIntParam = optIntParam;
+exports.paginationParam = paginationParam;
 exports.parseMultiParams = parseMultiParams;
 exports.parseParams = parseParams;
 exports.queryStrategy = queryStrategy;
