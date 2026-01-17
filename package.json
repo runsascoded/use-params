@@ -1,6 +1,6 @@
 {
-  "name": "@rdub/use-url-params",
-  "version": "0.1.2-dist.c669da0",
+  "name": "use-params",
+  "version": "0.2.0-dist.1cc5ec8",
   "main": "./index.cjs",
   "module": "./index.js",
   "types": "./index.d.ts",
@@ -9,9 +9,30 @@
       "types": "./index.d.ts",
       "import": "./index.js",
       "require": "./index.cjs"
+    },
+    "./hash": {
+      "types": "./hash.d.ts",
+      "import": "./hash.js",
+      "require": "./hash.cjs"
     }
   },
   "peerDependencies": {
     "react": "^18.0.0"
-  }
+  },
+  "description": "Type-safe URL query parameter management with minimal, human-readable encoding",
+  "keywords": [
+    "url",
+    "query",
+    "params",
+    "state",
+    "react",
+    "hooks",
+    "typescript"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/runsascoded/use-url-params"
+  },
+  "author": "Ryan Williams",
+  "license": "MIT"
 }
