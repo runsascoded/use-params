@@ -1,6 +1,6 @@
 {
   "name": "use-prms",
-  "version": "0.2.0-dist.5630374",
+  "version": "0.2.0-dist.512c800",
   "main": "./index.cjs",
   "module": "./index.js",
   "types": "./index.d.ts",
@@ -19,7 +19,7 @@
   "peerDependencies": {
     "react": "^18.0.0"
   },
-  "description": "Type-safe URL query parameter management with minimal, human-readable encoding",
+  "description": "Type-safe URL-parameter (query and hash) management with minimal, human-readable encoding and decoding",
   "keywords": [
     "url",
     "query",
