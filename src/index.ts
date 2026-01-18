@@ -11,6 +11,8 @@ export {
   hashStrategy,
   getDefaultStrategy,
   setDefaultStrategy,
+  notifyLocationChange,
+  clearParams,
 } from './core.js'
 
 /**

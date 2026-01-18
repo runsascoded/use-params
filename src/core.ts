@@ -75,6 +75,41 @@ export function serializeMultiParams(params: Record<string, MultiEncoded>): stri
 }
 
 /**
+ * Custom event name for location changes triggered by History API
+ */
+const LOCATION_CHANGE_EVENT = 'use-prms:locationchange'
+
+/**
+ * Patch History API to dispatch events on pushState/replaceState
+ * This enables automatic reactivity to all programmatic URL changes
+ */
+let historyPatched = false
+function patchHistoryApi(): void {
+  if (typeof window === 'undefined' || historyPatched) return
+  historyPatched = true
+
+  const originalPushState = history.pushState.bind(history)
+  const originalReplaceState = history.replaceState.bind(history)
+
+  history.pushState = function(state, title, url) {
+    originalPushState(state, title, url)
+    window.dispatchEvent(new CustomEvent(LOCATION_CHANGE_EVENT))
+    // Also dispatch popstate for React Router and other libraries that listen to it
+    window.dispatchEvent(new PopStateEvent('popstate', { state }))
+  }
+
+  history.replaceState = function(state, title, url) {
+    originalReplaceState(state, title, url)
+    window.dispatchEvent(new CustomEvent(LOCATION_CHANGE_EVENT))
+    // Also dispatch popstate for React Router and other libraries that listen to it
+    window.dispatchEvent(new PopStateEvent('popstate', { state }))
+  }
+}
+
+// Patch on module load
+patchHistoryApi()
+
+/**
  * Query string location strategy
  * Reads/writes to window.location.search
  */
@@ -97,7 +132,11 @@ export const queryStrategy: LocationStrategy = {
   subscribe(callback: () => void): () => void {
     if (typeof window === 'undefined') return () => {}
     window.addEventListener('popstate', callback)
-    return () => window.removeEventListener('popstate', callback)
+    window.addEventListener(LOCATION_CHANGE_EVENT, callback)
+    return () => {
+      window.removeEventListener('popstate', callback)
+      window.removeEventListener(LOCATION_CHANGE_EVENT, callback)
+    }
   },
 }
 
@@ -127,14 +166,42 @@ export const hashStrategy: LocationStrategy = {
 
   subscribe(callback: () => void): () => void {
     if (typeof window === 'undefined') return () => {}
-    // Listen to both hashchange and popstate for hash navigation
+    // Listen to hashchange, popstate, and our custom event for all navigation types
     window.addEventListener('hashchange', callback)
     window.addEventListener('popstate', callback)
+    window.addEventListener(LOCATION_CHANGE_EVENT, callback)
     return () => {
       window.removeEventListener('hashchange', callback)
       window.removeEventListener('popstate', callback)
+      window.removeEventListener(LOCATION_CHANGE_EVENT, callback)
     }
   },
+}
+
+/**
+ * Notify all use-prms hooks that the URL has changed.
+ * Note: With the History API patch, this is rarely needed since pushState/replaceState
+ * automatically trigger notifications. Use this for edge cases like direct location assignment.
+ */
+export function notifyLocationChange(): void {
+  if (typeof window === 'undefined') return
+  window.dispatchEvent(new CustomEvent(LOCATION_CHANGE_EVENT))
+}
+
+/**
+ * Clear all URL params.
+ * @param strategy - Which location to clear (query or hash), defaults to query
+ */
+export function clearParams(strategy: 'query' | 'hash' = 'query'): void {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  if (strategy === 'hash') {
+    url.hash = ''
+  } else {
+    url.search = ''
+  }
+  // replaceState triggers our custom event automatically via the patch
+  window.history.replaceState({}, '', url.toString())
 }
 
 // Default strategy (can be changed by entry points like hash.ts)
