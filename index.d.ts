@@ -96,11 +96,6 @@ declare function intParam(init: number): Param<number>;
  */
 declare const optIntParam: Param<number | null>;
 /**
- * Float parameter with default.
- * Omitted from URL when equal to default.
- */
-declare function floatParam(init: number): Param<number>;
-/**
  * Enum parameter with validation.
  * Omitted from URL when equal to default.
  * Invalid values fall back to default with console warning.
@@ -191,7 +186,7 @@ type MultiParam<T> = {
  *
  * @example
  * // ?tag=a&tag=b&tag=c → ['a', 'b', 'c']
- * const [tags, setTags] = useMultiUrlParam('tag', multiStringParam())
+ * const [tags, setTags] = useMultiUrlState('tag', multiStringParam())
  */
 declare function multiStringParam(init?: string[]): MultiParam<string[]>;
 /**
@@ -200,7 +195,7 @@ declare function multiStringParam(init?: string[]): MultiParam<string[]>;
  *
  * @example
  * // ?id=1&id=2&id=3 → [1, 2, 3]
- * const [ids, setIds] = useMultiUrlParam('id', multiIntParam())
+ * const [ids, setIds] = useMultiUrlState('id', multiIntParam())
  */
 declare function multiIntParam(init?: number[]): MultiParam<number[]>;
 /**
@@ -209,7 +204,7 @@ declare function multiIntParam(init?: number[]): MultiParam<number[]>;
  *
  * @example
  * // ?val=1.5&val=2.7 → [1.5, 2.7]
- * const [vals, setVals] = useMultiUrlParam('val', multiFloatParam())
+ * const [vals, setVals] = useMultiUrlState('val', multiFloatParam())
  */
 declare function multiFloatParam(init?: number[]): MultiParam<number[]>;
 
@@ -218,31 +213,61 @@ declare function multiFloatParam(init?: number[]): MultiParam<number[]>;
  */
 
 /**
+ * Options for useUrlState hook
+ */
+interface UseUrlStateOptions {
+    /**
+     * Debounce URL writes in milliseconds.
+     * State updates immediately, but URL updates are debounced.
+     * Useful for high-frequency updates (dragging, animation, typing).
+     * @default 0 (no debounce)
+     */
+    debounce?: number;
+    /**
+     * Use pushState (true) or replaceState (false) when updating URL.
+     * @default false (replaceState)
+     */
+    push?: boolean;
+}
+/**
  * React hook for managing a single URL query parameter.
+ *
+ * Features:
+ * - Bidirectional sync: state ↔ URL
+ * - Causality tracking: prevents feedback loops and lossy re-decoding
+ * - Optional debounce for high-frequency updates
  *
  * @param key - Query parameter key
  * @param param - Param encoder/decoder
- * @param push - Use pushState (true) or replaceState (false) when updating
+ * @param options - Options (debounce, push)
  * @returns Tuple of [value, setValue]
  *
  * @example
  * ```tsx
- * const [zoom, setZoom] = useUrlParam('z', boolParam)
- * const [device, setDevice] = useUrlParam('d', stringParam('default'))
+ * // Basic usage
+ * const [zoom, setZoom] = useUrlState('z', boolParam)
+ *
+ * // With debounce for high-frequency updates
+ * const [position, setPosition] = useUrlState('pos', floatParam(0), { debounce: 300 })
  * ```
  */
-declare function useUrlParam<T>(key: string, param: Param<T>, push?: boolean): [T, (value: T) => void];
+declare function useUrlState<T>(key: string, param: Param<T>, options?: UseUrlStateOptions | boolean): [T, (value: T) => void];
 /**
  * React hook for managing multiple URL query parameters together.
  * Updates are batched into a single history entry.
  *
+ * Features:
+ * - Bidirectional sync: state ↔ URL
+ * - Causality tracking: prevents feedback loops and lossy re-decoding
+ * - Optional debounce for high-frequency updates
+ *
  * @param params - Object mapping keys to Param types
- * @param push - Use pushState (true) or replaceState (false) when updating
+ * @param options - Options (debounce, push)
  * @returns Object with decoded values and update function
  *
  * @example
  * ```tsx
- * const { values, setValues } = useUrlParams({
+ * const { values, setValues } = useUrlStates({
  *   zoom: boolParam,
  *   device: stringParam('default'),
  *   count: intParam(10)
@@ -252,7 +277,7 @@ declare function useUrlParam<T>(key: string, param: Param<T>, push?: boolean): [
  * setValues({ zoom: true, count: 20 })
  * ```
  */
-declare function useUrlParams<P extends Record<string, Param<any>>>(params: P, push?: boolean): {
+declare function useUrlStates<P extends Record<string, Param<any>>>(params: P, options?: UseUrlStateOptions | boolean): {
     values: {
         [K in keyof P]: P[K] extends Param<infer T> ? T : never;
     };
@@ -264,29 +289,39 @@ declare function useUrlParams<P extends Record<string, Param<any>>>(params: P, p
  * React hook for managing a single multi-value URL parameter.
  * Supports repeated params like ?tag=a&tag=b&tag=c
  *
+ * Features:
+ * - Bidirectional sync: state ↔ URL
+ * - Causality tracking: prevents feedback loops and lossy re-decoding
+ * - Optional debounce for high-frequency updates
+ *
  * @param key - Query parameter key
  * @param param - MultiParam encoder/decoder
- * @param push - Use pushState (true) or replaceState (false) when updating
+ * @param options - Options (debounce, push)
  * @returns Tuple of [value, setValue]
  *
  * @example
  * ```tsx
- * const [tags, setTags] = useMultiUrlParam('tag', multiStringParam())
+ * const [tags, setTags] = useMultiUrlState('tag', multiStringParam())
  * // URL: ?tag=a&tag=b → tags = ['a', 'b']
  * ```
  */
-declare function useMultiUrlParam<T>(key: string, param: MultiParam<T>, push?: boolean): [T, (value: T) => void];
+declare function useMultiUrlState<T>(key: string, param: MultiParam<T>, options?: UseUrlStateOptions | boolean): [T, (value: T) => void];
 /**
  * React hook for managing multiple multi-value URL parameters together.
  * Updates are batched into a single history entry.
  *
+ * Features:
+ * - Bidirectional sync: state ↔ URL
+ * - Causality tracking: prevents feedback loops and lossy re-decoding
+ * - Optional debounce for high-frequency updates
+ *
  * @param params - Object mapping keys to MultiParam types
- * @param push - Use pushState (true) or replaceState (false) when updating
+ * @param options - Options (debounce, push)
  * @returns Object with decoded values and update function
  *
  * @example
  * ```tsx
- * const { values, setValues } = useMultiUrlParams({
+ * const { values, setValues } = useMultiUrlStates({
  *   tags: multiStringParam(),
  *   ids: multiIntParam()
  * })
@@ -295,13 +330,329 @@ declare function useMultiUrlParam<T>(key: string, param: MultiParam<T>, push?: b
  * setValues({ tags: ['a', 'b'], ids: [1, 2, 3] })
  * ```
  */
-declare function useMultiUrlParams<P extends Record<string, MultiParam<any>>>(params: P, push?: boolean): {
+declare function useMultiUrlStates<P extends Record<string, MultiParam<any>>>(params: P, options?: UseUrlStateOptions | boolean): {
     values: {
         [K in keyof P]: P[K] extends MultiParam<infer T> ? T : never;
     };
     setValues: (updates: Partial<{
         [K in keyof P]: P[K] extends MultiParam<infer T> ? T : never;
     }>) => void;
+};
+
+/**
+ * Binary encoding utilities for compact URL parameters
+ *
+ * Provides base64url encoding for arbitrary binary data.
+ * Use these to create compact URL representations of complex data structures.
+ */
+/**
+ * URL-safe base64 alphabet (RFC 4648 base64url)
+ * Uses - and _ instead of + and / for URL safety
+ */
+declare const BASE64_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+/**
+ * Encode a Uint8Array to base64url string
+ */
+declare function base64Encode(bytes: Uint8Array): string;
+/**
+ * Decode a base64url string to Uint8Array
+ */
+declare function base64Decode(str: string): Uint8Array;
+/**
+ * Options for binary param creation
+ */
+interface BinaryParamOptions<T> {
+    /**
+     * Convert value to bytes
+     */
+    toBytes: (value: T) => Uint8Array;
+    /**
+     * Convert bytes to value
+     */
+    fromBytes: (bytes: Uint8Array) => T;
+}
+
+/**
+ * Create a param that encodes/decodes via binary representation
+ *
+ * This is a mid-level helper for creating custom binary-encoded params.
+ * You provide toBytes/fromBytes converters, and it handles the base64url encoding.
+ *
+ * @example
+ * ```ts
+ * // Custom binary encoding for a shape array
+ * const shapesParam = binaryParam<Shape[]>({
+ *   toBytes: (shapes) => encodeShapesToBytes(shapes),
+ *   fromBytes: (bytes) => decodeBytesToShapes(bytes),
+ * })
+ *
+ * // Use with useUrlState
+ * const [shapes, setShapes] = useUrlState('s', shapesParam)
+ * ```
+ */
+declare function binaryParam<T>(options: BinaryParamOptions<T>): Param<T | null>;
+/**
+ * Create a base64-encoded binary param
+ * Shorthand for binaryParam
+ */
+declare function base64Param<T>(toBytes: (value: T) => Uint8Array, fromBytes: (bytes: Uint8Array) => T): Param<T | null>;
+/**
+ * Convert a 64-bit float to 8 bytes (IEEE 754 big-endian)
+ */
+declare function floatToBytes(value: number): Uint8Array;
+/**
+ * Convert 8 bytes to a 64-bit float (IEEE 754 big-endian)
+ */
+declare function bytesToFloat(bytes: Uint8Array): number;
+
+/**
+ * Float encoding utilities for compact URL parameters
+ *
+ * Provides IEEE 754 decomposition, fixed-point conversion, and bit-level packing
+ * for encoding floats with configurable precision.
+ */
+/**
+ * Decomposed IEEE 754 double-precision float
+ */
+interface Float {
+    neg: boolean;
+    exp: number;
+    mant: bigint;
+}
+/**
+ * Fixed-point representation with shared exponent
+ */
+interface FixedPoint {
+    neg: boolean;
+    exp: number;
+    mant: bigint;
+}
+/**
+ * Precision scheme for fixed-point encoding
+ */
+interface PrecisionScheme {
+    expBits: number;
+    mantBits: number;
+}
+/**
+ * Predefined precision schemes for reference
+ * Higher mantBits = more precision, larger URL
+ */
+declare const precisionSchemes: PrecisionScheme[];
+/**
+ * Resolve precision option to a PrecisionScheme
+ * Accepts mantissa bits (number) or a full custom scheme
+ */
+declare function resolvePrecision(precision: number | PrecisionScheme | undefined): PrecisionScheme;
+/**
+ * Decompose an IEEE 754 double into sign, exponent, and mantissa
+ */
+declare function toFloat(x: number): Float;
+/**
+ * Reconstruct a number from decomposed IEEE 754 components
+ */
+declare function fromFloat({ neg, exp, mant }: Float): number;
+/**
+ * Convert a decomposed float to fixed-point with specified mantissa bits
+ */
+declare function toFixedPoint(f: Float, opts: {
+    mantBits: number;
+    exp?: number;
+}): FixedPoint;
+/**
+ * Convert a fixed-point value back to decomposed float
+ */
+declare function fromFixedPoint(f: FixedPoint, mantBits: number): Float;
+/**
+ * Bit-level buffer for packing/unpacking arbitrary bit widths
+ *
+ * Use this for custom binary encodings. Pack data with encodeInt/encodeBigInt,
+ * then convert to base64 for URL-safe strings.
+ *
+ * @example
+ * ```ts
+ * // Encoding
+ * const buf = new BitBuffer()
+ * buf.encodeInt(myEnum, 3)      // 3 bits for enum
+ * buf.encodeInt(myCount, 8)     // 8 bits for count
+ * buf.encodeBigInt(myId, 48)    // 48 bits for ID
+ * const urlParam = buf.toBase64()
+ *
+ * // Decoding
+ * const buf = BitBuffer.fromBase64(urlParam)
+ * const myEnum = buf.decodeInt(3)
+ * const myCount = buf.decodeInt(8)
+ * const myId = buf.decodeBigInt(48)
+ * ```
+ */
+declare class BitBuffer {
+    buf: number[];
+    byteOffset: number;
+    bitOffset: number;
+    end: number;
+    constructor(numBytes?: number);
+    get totalBitOffset(): number;
+    seek(totalBitOffset: number): BitBuffer;
+    /**
+     * Encode an integer with specified bit width
+     */
+    encodeInt(n: number, numBits: number): BitBuffer;
+    /**
+     * Decode an integer with specified bit width
+     */
+    decodeInt(numBits: number): number;
+    /**
+     * Encode a bigint with specified bit width
+     */
+    encodeBigInt(n: bigint, numBits: number): BitBuffer;
+    /**
+     * Decode a bigint with specified bit width
+     */
+    decodeBigInt(numBits: number): bigint;
+    /**
+     * Encode an array of floats with shared exponent
+     */
+    encodeFixedPoints(vals: number[], { expBits, mantBits }: PrecisionScheme): BitBuffer;
+    /**
+     * Decode an array of floats with shared exponent
+     */
+    decodeFixedPoints(count: number, { expBits, mantBits }: PrecisionScheme): number[];
+    /**
+     * Get bytes as Uint8Array
+     */
+    toBytes(): Uint8Array;
+    /**
+     * Create from bytes
+     */
+    static fromBytes(bytes: Uint8Array): BitBuffer;
+    /**
+     * Convert buffer to URL-safe base64 string
+     *
+     * This is the primary way to serialize a BitBuffer for use in URL parameters.
+     */
+    toBase64(): string;
+    /**
+     * Create a BitBuffer from a URL-safe base64 string
+     *
+     * This is the primary way to deserialize a URL parameter back to a BitBuffer.
+     */
+    static fromBase64(str: string): BitBuffer;
+}
+
+/**
+ * Encoding mode for float params
+ */
+type FloatEncoding = 'string' | 'base64';
+/**
+ * Options for floatParam
+ */
+interface FloatParamOptions {
+    /** Default value when param is missing */
+    default?: number;
+    /** Encoding mode: 'base64' (default) or 'string' */
+    encoding?: FloatEncoding;
+    /** For string encoding: number of decimal places */
+    decimals?: number;
+    /** For lossy base64: exponent bits (requires mant) */
+    exp?: number;
+    /** For lossy base64: mantissa bits (requires exp) */
+    mant?: number;
+    /** For lossy base64: string shorthand like '5+22' (exp+mant) */
+    precision?: string;
+}
+/**
+ * Create a float param with configurable encoding
+ *
+ * @example
+ * ```ts
+ * // Lossless base64 (default) - 11 chars, exact
+ * const f = floatParam(0)
+ * const f = floatParam({ default: 0 })
+ * const f = floatParam({ default: 0, encoding: 'base64' })
+ *
+ * // Lossy base64 - fewer chars, approximate
+ * const f = floatParam({ default: 0, encoding: 'base64', exp: 5, mant: 22 })
+ * const f = floatParam({ default: 0, encoding: 'base64', precision: '5+22' })
+ *
+ * // String encoding - full precision toString()
+ * const f = floatParam({ default: 0, encoding: 'string' })
+ *
+ * // Truncated string - fixed decimal places
+ * const f = floatParam({ default: 0, encoding: 'string', decimals: 6 })
+ * ```
+ */
+declare function floatParam(optsOrDefault?: number | FloatParamOptions): Param<number>;
+/**
+ * Convenience wrapper for base64 float encoding
+ *
+ * @example
+ * ```ts
+ * base64FloatParam(0)                    // lossless
+ * base64FloatParam({ exp: 5, mant: 22 }) // lossy
+ * ```
+ */
+declare function base64FloatParam(optsOrDefault?: number | Omit<FloatParamOptions, 'encoding' | 'decimals'>): Param<number>;
+/**
+ * 2D point type
+ */
+interface Point {
+    x: number;
+    y: number;
+}
+/**
+ * Options for point param
+ */
+interface PointParamOptions {
+    /** Encoding mode */
+    encoding?: FloatEncoding;
+    /** For string encoding: decimal places */
+    decimals?: number;
+    /** For binary encoding: mantissa bits (8-52) or custom scheme. Default: 22 bits */
+    precision?: number | PrecisionScheme;
+    /** Default point when param is missing */
+    default?: Point;
+}
+/**
+ * Create a param for encoding a 2D point
+ *
+ * String mode: "x,y" with truncated decimals
+ * Binary mode: packed fixed-point with shared exponent
+ *
+ * @example
+ * ```ts
+ * // String encoding
+ * const posParam = pointParam({ encoding: 'string', decimals: 2 })
+ * posParam.encode({ x: 1.234, y: 5.678 }) // "1.23 5.68"
+ *
+ * // Binary encoding (more compact)
+ * const posParam = pointParam({ encoding: 'base64', precision: 22 })
+ * posParam.encode({ x: 1.234, y: 5.678 }) // compact base64
+ * ```
+ */
+declare function pointParam(opts?: PointParamOptions): Param<Point | null>;
+/**
+ * Encode a float to string and base64 representations for comparison
+ *
+ * Utility for demo/debugging to show encoding modes
+ */
+declare function encodeFloatAllModes(value: number, opts?: {
+    decimals?: number;
+    precision?: number | PrecisionScheme;
+}): {
+    string: string;
+    base64: string;
+    bits: number;
+};
+/**
+ * Encode a point to string and base64 representations for comparison
+ */
+declare function encodePointAllModes(point: Point, opts?: {
+    decimals?: number;
+    precision?: number | PrecisionScheme;
+}): {
+    string: string;
+    base64: string;
+    bits: number;
 };
 
 /**
@@ -349,4 +700,4 @@ declare function getCurrentParams(): Record<string, Encoded>;
  */
 declare function updateUrl(params: Record<string, Encoded>, push?: boolean): void;
 
-export { type CodeMap, type Encoded, type LocationStrategy, type MultiEncoded, type MultiParam, type Pagination, type Param, boolParam, clearParams, codeParam, codesParam, defStringParam, enumParam, floatParam, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, optIntParam, paginationParam, parseMultiParams, parseParams, queryStrategy, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, updateUrl, useMultiUrlParam, useMultiUrlParams, useUrlParam, useUrlParams };
+export { BASE64_CHARS, type BinaryParamOptions, BitBuffer, type CodeMap, type Encoded, type FixedPoint, type Float, type FloatEncoding, type FloatParamOptions, type LocationStrategy, type MultiEncoded, type MultiParam, precisionSchemes as PRECISION_SCHEMES, type Pagination, type Param, type Point, type PointParamOptions, type PrecisionScheme, type UseUrlStateOptions, base64Decode, base64Encode, base64FloatParam, base64Param, binaryParam, boolParam, bytesToFloat, clearParams, codeParam, codesParam, defStringParam, encodeFloatAllModes, encodePointAllModes, enumParam, floatParam, floatToBytes, fromFixedPoint, fromFloat, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, optIntParam, paginationParam, parseMultiParams, parseParams, pointParam, precisionSchemes, queryStrategy, resolvePrecision, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, toFixedPoint, toFloat, updateUrl, useMultiUrlState, useMultiUrlStates, useUrlState, useUrlStates };
