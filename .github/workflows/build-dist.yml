@@ -1,8 +1,0 @@
-name: Build dist branch
-on:
-  push:
-    branches: [main]
-  workflow_dispatch:
-jobs:
-  build-dist:
-    uses: runsascoded/npm-dist/.github/workflows/build-dist.yml@v1

@@ -1,9 +1,0 @@
-name: Release
-on:
-  push:
-    tags: ['v*']
-jobs:
-  release:
-    uses: runsascoded/pnpm-release/.github/workflows/release.yml@v1
-    secrets:
-      npm_token: ${{ secrets.NPM_TOKEN }}
