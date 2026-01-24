@@ -18,6 +18,7 @@ Type-safe URL-parameter (query and hash) management with minimal, human-readable
 - [Hash Params](#hash)
 - [API Reference](#api)
 - [Examples](#examples)
+- [Reverse Inspo](#reverse-inspo)
 - [License](#license)
 
 ## Features <a id="features"></a>
@@ -348,6 +349,107 @@ Projects using `use-prms`:
 [kbd.rbw.sh]: https://kbd.rbw.sh
 [use-kbd-gh]: https://github.com/runsascoded/use-kbd
 [use-kbd-search]: https://github.com/search?q=repo%3Arunsascoded%2Fuse-kbd+use-prms&type=code
+
+## Reverse Inspo <a id="reverse-inspo"></a>
+
+It's nice when URLs are concise but also reasonably human-readable. Some examples I've seen in the wild that exhibit room for improvement:
+
+### UUID Soup (OpenAI Careers)
+```
+https://openai.com/careers/search/
+  ?l=e8062547-b090-4206-8f1e-7329e0014e98%2C07ed9191-5bc6-421b-9883-f1ac2e276ad7
+  &c=e1e973fe-6f0a-475f-9361-a9b6c095d869%2Cf002fe09-4cec-46b0-8add-8bf9ff438a62
+    %2Cab2b9da4-24a4-47df-8bed-1ed5a39c7036%2C687d87ec-1505-40e7-a2b5-cc7f31c0ea48
+    %2Cd36236ec-fb74-49bd-bd3f-9d8365e2e2cb%2C27c9a852-c401-450e-9480-d3b507b8f64a
+    %2C6dd4a467-446d-4093-8d57-d4633a571123%2C7cba3ac0-2b6e-4d52-ad38-e39a5f61c73f
+    %2C0f06f916-a404-414f-813f-6ac7ff781c61%2Cfb2b77c5-5f20-4a93-a1c4-c3d640d88e04
+```
+12 UUIDs for location and category filters. Each UUID is 36 characters. With short codes, this could be `?l=sf,ny&c=eng,res,des,acct,data,hr,infra,accel,acq,bus`.
+
+### Encrypted Blobs (Supercast, Priceline)
+```
+https://feeds.supercast.com/episodes/8a1aa9e2dde4319825e6a8171b4d51fa1835ef4a
+  6730170db60a92c8f0670bb08c3cef884f0e4288c970c980083820e89cd692f582c44cde
+  544c7aae86fc721f69ed9f695a43e5e21f4d344b32e70bae48a8fe0ae8b472d99502041a
+  bad3dc650a6973653c094eae0631f637d96bb42ab5d26b8ea6b1638b7ffa23f66e46282b
+  52970b59b2c13f9e6214251ad793be244bb9dc7e5bd7cefe77b6ec71b06c85e3bc9c194a
+  d4ca10b27cfd7b8b1c181b3d9aea144bb978d1d790f08d89049d5a29a477651f1b799eec
+  827ed95209dc741207e2b331170cb01c625d51982913eb8757ef2b2037235624a7bbfab9
+  8a641e98a507ee096d0678c8ab458fd87731a9a7a0bdc87a99fbbfe684be10f5d4259265
+  68b041a308017ce2901b3c6bf4b3bc89a2b13f3c54047d2fc5f69e9a5053b5e5bb2e0f70
+  a2a77d9a25c97b890faec970e29f1c6961b1e00ccd1d8ba9c4006ba8b657193fe5a5b8e4
+  6aa6a86492c381c79afe09d347d25c550c195d080695e3b97c012be3ebf1e2e64bd9f6c2
+  9977e4b34184858bcf99164010dc3746f49d90df559f7dfa6f029f50f35f7777c44d1247
+  ecdfc7861969f172d63eb3acc620ac25919cdc5caf4397793b7d564ccc4b0519118027.mp3
+  ?key=8kSKDMBUEi2TCGyzhdzZBVSN&v=0
+```
+
+```
+https://www.priceline.com/relax/at/2003205/from/20240628/to/20240629/rooms/1
+  ?meta-id=AyOy_-ov9Edvq6cYGWUbaO9KdvlksSZCnHtEiIUqbvfIqUNLp0ZV0WiDB-MXSyZhxM
+    mSw6xJm0HTePNNo_NwvV_Mzo1DeUvJhE53dMnjIqnwb7rfeGGSHOuOML_0zcWCYppfcv6Cf8T
+    Na_TIadYlC8PJkvC_qY7bm0lXIqygsn03MyXPyXyUCXNRcKiIm2QS5bWoOeiO48zWgHRtLUDm
+    cNx8o6rdlIukl18vqu8RQYajSd3Yt9bbWwDTBjeEduJ2sfoh4Mi3XtGzbqy8YpUrRgIUCGCYf
+    DHBdaS47dUkqKfqtQvY7yCPh9Y4YNUZtt9w-TRqndd6AdvbOMprSAbawg8IU5wIj-yEbZr82e
+    CcQg2dylETYccSaRK07WHSEJx7
+  &pclnId=0571D9ABC99167E702D55CD454625E1BD51BC6742D4EB3A6869799404CB9B21E0E31
+    CA463BDC3DE5A56EDB9C6B55C3F06EB5CBBC77502608C5279D0943A5F2545B3F0E4366F3FB
+    CCDE32424FB9D2CC10B7E2B68DD59C89151023C9B800744FDDF1C7D85AEB2CF27E
+  &gid=5369&cityId=3000035889&cur=USD&backlink-id=gotjhpxt5bp
+```
+900 hex characters, 400-char tracking IDs, session blobs.
+
+### Tracking Parameter Avalanche (Apple TV)
+```
+https://tv.apple.com/us/show/severance/umc.cmc.1srk2goyh2q2zdxcx605w8vtx
+  ?ign-itscg=MC_20000&ign-itsct=atvp_brand_omd
+  &mttn3pid=Google%20AdWords&mttnagencyid=a5e&mttncc=US
+  &mttnsiteid=143238&mttnsubad=OUS2019927_1-592764821446-m
+  &mttnsubkw=133111427260__zxnj5jSX_&mttnsubplmnt=
+```
+Seven `mttn*` tracking parameters that are excessively verbose (and come from a single ad click).
+
+### Base64-Encoded Redirect URLs (Wired)
+```
+https://link.wired.com/external/39532383.1121/aHR0cHM6Ly9jb25kZW5hc3Quem9vbS
+  51cy93ZWJpbmFyL3JlZ2lzdGVyL1dOX29kcldRdE5uUkdhSUN3MHZob0N3ckE_dXRtX3Nvd
+  XJjZT1ubCZ1dG1fYnJhbmQ9d2lyZWQmdXRtX21haWxpbmc9V0lSX1BheXdhbGxTdWJzXzA0
+  MjMyNV9TcGVjaWFsX0FJVW5sb2NrZWRfTkxTVUJTSW52aXRlJnV0bV9jYW1wYWlnbj1hdWQ
+  tZGV2JnV0bV9tZWRpdW09ZW1haWwmdXRtX2NvbnRlbnQ9V0lSX1BheXdhbGxTdWJzXzA0Mj
+  MyNV9TcGVjaWFsX0FJVW5sb2NrZWRfTkxTVUJTSW52aXRlJmJ4aWQ9NWNjOWUwZjdmYzk0M
+  mQxM2ViMWY0YjhjJmNuZGlkPTUwNTQyMzY4Jmhhc2hhPTQwODY5ZjRmY2ExOWRkZjU2NTUz
+  M2Q2NzMxYmVkMTExJmhhc2hiPWFjNzQxNjk4NjkyMTE1YWExOGRkNzg5N2JjMTIxNmIwNWM
+  0YmI2ODgmaGFzaGM9ZTA5YTA4NzM0MTM3NDA4ODE3NzZlNjExNzQ3NzQ3NDM5ZDYzMGM2YT
+  k0NGVmYTIwOGFhMzhhYTMwZjljYTE0NyZlc3JjPU9JRENfU0VMRUNUX0FDQ09VTlRfUEFHR
+  Q/5cc9e0f7fc942d13eb1f4b8cB8513f7ce
+```
+A URL containing another (base64-encoded) URL containing UTM params, hashes, and tracking IDs.
+
+### Kitchen Sink (Grubhub)
+```
+https://www.grubhub.com/restaurant/bobs-noodle-house-123-main-st-newark/4857291
+  /grouporder/Xk7rPwchQfDsT3J9yCtghR
+  ?pageNum=1&pageSize=20
+  &facet=scheduled%3Afalse&facet=orderType%3AALL
+  &includePartnerOrders=true&sorts=default&blockModal=true
+  &utm_source=grubhub_web&utm_medium=content_owned
+  &utm_campaign=product_sharedcart_join&utm_content=share-link
+```
+Session IDs, pagination defaults that could be omitted, boolean flags, four UTM parameters, and all more verbose than necessary, resulting in an unwieldy URL.
+
+### The `use-prms` way
+
+This may not be best in all cases, but `use-prms` encourages encoding the same information more compactly:
+
+| Verbose                                | Compact                          | Meaning                              |
+|----------------------------------------|----------------------------------|--------------------------------------|
+| `?show_grid=true`                      | `?g`                             | Boolean flag                         |
+| `?page_number=5&page_size=50`          | `?p=5x50`                        | Compact, combined state              |
+| `?page_number=5&page_size=20`          | `?p=5`                           | Default values omitted               |
+| `?category=e1e973fe-6f0a-...`          | `?c=eng`                         | Short, human-readable codes for enums |
+| `?latitude=40.7128&longitude=-74.0060` | `?ll=40.7128-74.0060`            | Compact, combined state              |
+
+URLs are part of your UI. Treat them with the same care as your design.
 
 ## License <a id="license"></a>
 
