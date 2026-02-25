@@ -659,6 +659,28 @@ interface FloatParamOptions {
  */
 declare function floatParam(optsOrDefault?: number | FloatParamOptions): Param<number>;
 /**
+ * Create an optional float param with configurable encoding
+ *
+ * Like `floatParam` but absent → `null` instead of a default number.
+ * `null` encodes as absent (removed from URL); any number (including 0) encodes normally.
+ *
+ * @example
+ * ```ts
+ * // Lossless base64 (default)
+ * const f = optFloatParam()
+ *
+ * // Lossy base64
+ * const f = optFloatParam({ encoding: 'base64', exp: 5, mant: 22 })
+ *
+ * // String encoding with fixed decimals
+ * const f = optFloatParam({ encoding: 'string', decimals: 2 })
+ *
+ * // Full precision string
+ * const f = optFloatParam({ encoding: 'string' })
+ * ```
+ */
+declare function optFloatParam(opts?: Omit<FloatParamOptions, 'default'>): Param<number | null>;
+/**
  * Convenience wrapper for base64 float encoding
  *
  * @example
@@ -778,4 +800,4 @@ declare function getCurrentParams(): Record<string, Encoded>;
  */
 declare function updateUrl(params: Record<string, Encoded>, push?: boolean): void;
 
-export { ALPHABETS, type Alphabet, type AlphabetName, BASE64_CHARS, type Base64Options, type BinaryParamOptions, BitBuffer, type CodeMap, type Encoded, type FixedPoint, type Float, type FloatEncoding, type FloatParamOptions, type LocationStrategy, type MultiEncoded, type MultiParam, precisionSchemes as PRECISION_SCHEMES, type Pagination, type Param, type Point, type PointParamOptions, type PrecisionScheme, type UseUrlStateOptions, base64Decode, base64Encode, base64FloatParam, base64Param, binaryParam, boolParam, bytesToFloat, clearParams, codeParam, codesParam, createLookupMap, defStringParam, encodeFloatAllModes, encodePointAllModes, enumParam, floatParam, floatToBytes, fromFixedPoint, fromFloat, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, optIntParam, paginationParam, parseMultiParams, parseParams, pointParam, precisionSchemes, queryStrategy, resolveAlphabet, resolvePrecision, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, toFixedPoint, toFloat, updateUrl, useMultiUrlState, useMultiUrlStates, useUrlState, useUrlStates, validateAlphabet };
+export { ALPHABETS, type Alphabet, type AlphabetName, BASE64_CHARS, type Base64Options, type BinaryParamOptions, BitBuffer, type CodeMap, type Encoded, type FixedPoint, type Float, type FloatEncoding, type FloatParamOptions, type LocationStrategy, type MultiEncoded, type MultiParam, precisionSchemes as PRECISION_SCHEMES, type Pagination, type Param, type Point, type PointParamOptions, type PrecisionScheme, type UseUrlStateOptions, base64Decode, base64Encode, base64FloatParam, base64Param, binaryParam, boolParam, bytesToFloat, clearParams, codeParam, codesParam, createLookupMap, defStringParam, encodeFloatAllModes, encodePointAllModes, enumParam, floatParam, floatToBytes, fromFixedPoint, fromFloat, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, optFloatParam, optIntParam, paginationParam, parseMultiParams, parseParams, pointParam, precisionSchemes, queryStrategy, resolveAlphabet, resolvePrecision, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, toFixedPoint, toFloat, updateUrl, useMultiUrlState, useMultiUrlStates, useUrlState, useUrlStates, validateAlphabet };

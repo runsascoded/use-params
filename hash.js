@@ -1,4 +1,4 @@
-import { useRef, useSyncExternalStore, useCallback, useEffect } from 'react';
+import { useRef, useReducer, useSyncExternalStore, useCallback, useEffect } from 'react';
 
 // src/core.ts
 function parseMultiParams(source) {
@@ -347,7 +347,10 @@ function useUrlState(key, param, options = {}) {
   const strategy = getDefaultStrategy();
   const paramRef = useRef(param);
   paramRef.current = param;
+  const [, forceUpdate] = useReducer((c) => c + 1, 0);
   const lastWrittenRef = useRef(null);
+  const pendingRef = useRef(null);
+  const debouncedWriteRef = useRef(null);
   const urlParams = useSyncExternalStore(
     (cb) => strategy.subscribe(cb),
     () => getSnapshot(strategy),
@@ -355,8 +358,21 @@ function useUrlState(key, param, options = {}) {
   );
   const encoded = multiToSingle(urlParams[key] ?? []);
   const cacheRef = useRef(null);
+  const raw = strategy.getRaw();
   let value;
-  if (lastWrittenRef.current && lastWrittenRef.current.encoded === encoded) {
+  if (pendingRef.current) {
+    if (raw !== pendingRef.current.prevRaw) {
+      pendingRef.current = null;
+      debouncedWriteRef.current?.cancel();
+      if (cacheRef.current === null || cacheRef.current.encoded !== encoded || cacheRef.current.param !== param) {
+        cacheRef.current = { encoded, param, decoded: param.decode(encoded) };
+      }
+      value = cacheRef.current.decoded;
+      lastWrittenRef.current = null;
+    } else {
+      value = pendingRef.current.decoded;
+    }
+  } else if (lastWrittenRef.current && lastWrittenRef.current.encoded === encoded) {
     value = lastWrittenRef.current.decoded;
   } else {
     if (cacheRef.current === null || cacheRef.current.encoded !== encoded || cacheRef.current.param !== param) {
@@ -382,10 +398,15 @@ function useUrlState(key, param, options = {}) {
     },
     [key, push, strategy]
   );
-  const debouncedWriteRef = useRef(null);
   useEffect(() => {
     if (debounceMs > 0) {
-      debouncedWriteRef.current = debounce(writeToUrl, debounceMs);
+      debouncedWriteRef.current = debounce(
+        (...args) => {
+          writeToUrl(...args);
+          pendingRef.current = null;
+        },
+        debounceMs
+      );
     } else {
       debouncedWriteRef.current = null;
     }
@@ -398,12 +419,14 @@ function useUrlState(key, param, options = {}) {
       const newEncoded = paramRef.current.encode(newValue);
       lastWrittenRef.current = { encoded: newEncoded, decoded: newValue };
       if (debouncedWriteRef.current) {
+        pendingRef.current = { decoded: newValue, prevRaw: strategy.getRaw() };
         debouncedWriteRef.current(newValue, newEncoded);
+        forceUpdate();
       } else {
         writeToUrl(newValue, newEncoded);
       }
     },
-    [writeToUrl]
+    [writeToUrl, strategy, forceUpdate]
   );
   return [value, setValue];
 }
@@ -411,25 +434,58 @@ function useUrlStates(params, options = {}) {
   const opts = typeof options === "boolean" ? { push: options } : options;
   const { debounce: debounceMs = 0, push = false } = opts;
   const strategy = getDefaultStrategy();
+  const [, forceUpdate] = useReducer((c) => c + 1, 0);
   const lastWrittenRef = useRef({});
+  const pendingRef = useRef(null);
+  const debouncedWriteRef = useRef(null);
   const urlParams = useSyncExternalStore(
     (cb) => strategy.subscribe(cb),
     () => getSnapshot(strategy),
     getServerSnapshot
   );
-  const values = Object.fromEntries(
-    Object.entries(params).map(([key, param]) => {
-      const encoded = multiToSingle(urlParams[key] ?? []);
-      const lastWritten = lastWrittenRef.current[key];
-      if (lastWritten && lastWritten.encoded === encoded) {
-        return [key, lastWritten.decoded];
-      } else {
-        const decoded = param.decode(encoded);
-        delete lastWrittenRef.current[key];
-        return [key, decoded];
-      }
-    })
-  );
+  const raw = strategy.getRaw();
+  let values;
+  if (pendingRef.current) {
+    if (raw !== pendingRef.current.prevRaw) {
+      pendingRef.current = null;
+      debouncedWriteRef.current?.cancel();
+      lastWrittenRef.current = {};
+      values = Object.fromEntries(
+        Object.entries(params).map(([key, param]) => {
+          const encoded = multiToSingle(urlParams[key] ?? []);
+          return [key, param.decode(encoded)];
+        })
+      );
+    } else {
+      values = Object.fromEntries(
+        Object.entries(params).map(([key, param]) => {
+          if (key in pendingRef.current.values) {
+            return [key, pendingRef.current.values[key]];
+          }
+          const encoded = multiToSingle(urlParams[key] ?? []);
+          const lastWritten = lastWrittenRef.current[key];
+          if (lastWritten && lastWritten.encoded === encoded) {
+            return [key, lastWritten.decoded];
+          }
+          return [key, param.decode(encoded)];
+        })
+      );
+    }
+  } else {
+    values = Object.fromEntries(
+      Object.entries(params).map(([key, param]) => {
+        const encoded = multiToSingle(urlParams[key] ?? []);
+        const lastWritten = lastWrittenRef.current[key];
+        if (lastWritten && lastWritten.encoded === encoded) {
+          return [key, lastWritten.decoded];
+        } else {
+          const decoded = param.decode(encoded);
+          delete lastWrittenRef.current[key];
+          return [key, decoded];
+        }
+      })
+    );
+  }
   const writeToUrl = useCallback(
     (updates) => {
       if (typeof window === "undefined") return;
@@ -449,10 +505,15 @@ function useUrlStates(params, options = {}) {
     },
     [push, strategy]
   );
-  const debouncedWriteRef = useRef(null);
   useEffect(() => {
     if (debounceMs > 0) {
-      debouncedWriteRef.current = debounce(writeToUrl, debounceMs);
+      debouncedWriteRef.current = debounce(
+        (...args) => {
+          writeToUrl(...args);
+          pendingRef.current = null;
+        },
+        debounceMs
+      );
     } else {
       debouncedWriteRef.current = null;
     }
@@ -471,12 +532,18 @@ function useUrlStates(params, options = {}) {
         lastWrittenRef.current[key] = { encoded, decoded: value };
       }
       if (debouncedWriteRef.current) {
+        const pendingValues = pendingRef.current?.values ?? {};
+        for (const [key, value] of Object.entries(updates)) {
+          pendingValues[key] = value;
+        }
+        pendingRef.current = { values: pendingValues, prevRaw: strategy.getRaw() };
         debouncedWriteRef.current(encodedUpdates);
+        forceUpdate();
       } else {
         writeToUrl(encodedUpdates);
       }
     },
-    [params, writeToUrl]
+    [params, writeToUrl, strategy, forceUpdate]
   );
   return { values, setValues };
 }
@@ -486,15 +553,28 @@ function useMultiUrlState(key, param, options = {}) {
   const strategy = getDefaultStrategy();
   const paramRef = useRef(param);
   paramRef.current = param;
+  const [, forceUpdate] = useReducer((c) => c + 1, 0);
   const lastWrittenRef = useRef(null);
+  const pendingRef = useRef(null);
+  const debouncedWriteRef = useRef(null);
   const urlParams = useSyncExternalStore(
     (cb) => strategy.subscribe(cb),
     () => getSnapshot(strategy),
     getServerSnapshot
   );
   const encoded = urlParams[key] ?? [];
+  const raw = strategy.getRaw();
   let value;
-  if (lastWrittenRef.current && arraysEqual2(lastWrittenRef.current.encoded, encoded)) {
+  if (pendingRef.current) {
+    if (raw !== pendingRef.current.prevRaw) {
+      pendingRef.current = null;
+      debouncedWriteRef.current?.cancel();
+      value = param.decode(encoded);
+      lastWrittenRef.current = null;
+    } else {
+      value = pendingRef.current.decoded;
+    }
+  } else if (lastWrittenRef.current && arraysEqual2(lastWrittenRef.current.encoded, encoded)) {
     value = lastWrittenRef.current.decoded;
   } else {
     value = param.decode(encoded);
@@ -517,10 +597,15 @@ function useMultiUrlState(key, param, options = {}) {
     },
     [key, push, strategy]
   );
-  const debouncedWriteRef = useRef(null);
   useEffect(() => {
     if (debounceMs > 0) {
-      debouncedWriteRef.current = debounce(writeToUrl, debounceMs);
+      debouncedWriteRef.current = debounce(
+        (...args) => {
+          writeToUrl(...args);
+          pendingRef.current = null;
+        },
+        debounceMs
+      );
     } else {
       debouncedWriteRef.current = null;
     }
@@ -533,12 +618,14 @@ function useMultiUrlState(key, param, options = {}) {
       const newEncoded = paramRef.current.encode(newValue);
       lastWrittenRef.current = { encoded: newEncoded, decoded: newValue };
       if (debouncedWriteRef.current) {
+        pendingRef.current = { decoded: newValue, prevRaw: strategy.getRaw() };
         debouncedWriteRef.current(newEncoded);
+        forceUpdate();
       } else {
         writeToUrl(newEncoded);
       }
     },
-    [writeToUrl]
+    [writeToUrl, strategy, forceUpdate]
   );
   return [value, setValue];
 }
@@ -549,25 +636,57 @@ function useMultiUrlStates(params, options = {}) {
   const opts = typeof options === "boolean" ? { push: options } : options;
   const { debounce: debounceMs = 0, push = false } = opts;
   const strategy = getDefaultStrategy();
+  const [, forceUpdate] = useReducer((c) => c + 1, 0);
   const lastWrittenRef = useRef({});
+  const pendingRef = useRef(null);
+  const debouncedWriteRef = useRef(null);
   const urlParams = useSyncExternalStore(
     (cb) => strategy.subscribe(cb),
     () => getSnapshot(strategy),
     getServerSnapshot
   );
-  const values = Object.fromEntries(
-    Object.entries(params).map(([key, param]) => {
-      const encoded = urlParams[key] ?? [];
-      const lastWritten = lastWrittenRef.current[key];
-      if (lastWritten && arraysEqual2(lastWritten.encoded, encoded)) {
-        return [key, lastWritten.decoded];
-      } else {
-        const decoded = param.decode(encoded);
-        delete lastWrittenRef.current[key];
-        return [key, decoded];
-      }
-    })
-  );
+  const raw = strategy.getRaw();
+  let values;
+  if (pendingRef.current) {
+    if (raw !== pendingRef.current.prevRaw) {
+      pendingRef.current = null;
+      debouncedWriteRef.current?.cancel();
+      lastWrittenRef.current = {};
+      values = Object.fromEntries(
+        Object.entries(params).map(([key, param]) => {
+          return [key, param.decode(urlParams[key] ?? [])];
+        })
+      );
+    } else {
+      values = Object.fromEntries(
+        Object.entries(params).map(([key, param]) => {
+          if (key in pendingRef.current.values) {
+            return [key, pendingRef.current.values[key]];
+          }
+          const encoded = urlParams[key] ?? [];
+          const lastWritten = lastWrittenRef.current[key];
+          if (lastWritten && arraysEqual2(lastWritten.encoded, encoded)) {
+            return [key, lastWritten.decoded];
+          }
+          return [key, param.decode(encoded)];
+        })
+      );
+    }
+  } else {
+    values = Object.fromEntries(
+      Object.entries(params).map(([key, param]) => {
+        const encoded = urlParams[key] ?? [];
+        const lastWritten = lastWrittenRef.current[key];
+        if (lastWritten && arraysEqual2(lastWritten.encoded, encoded)) {
+          return [key, lastWritten.decoded];
+        } else {
+          const decoded = param.decode(encoded);
+          delete lastWrittenRef.current[key];
+          return [key, decoded];
+        }
+      })
+    );
+  }
   const writeToUrl = useCallback(
     (updates) => {
       if (typeof window === "undefined") return;
@@ -587,10 +706,15 @@ function useMultiUrlStates(params, options = {}) {
     },
     [push, strategy]
   );
-  const debouncedWriteRef = useRef(null);
   useEffect(() => {
     if (debounceMs > 0) {
-      debouncedWriteRef.current = debounce(writeToUrl, debounceMs);
+      debouncedWriteRef.current = debounce(
+        (...args) => {
+          writeToUrl(...args);
+          pendingRef.current = null;
+        },
+        debounceMs
+      );
     } else {
       debouncedWriteRef.current = null;
     }
@@ -609,12 +733,18 @@ function useMultiUrlStates(params, options = {}) {
         lastWrittenRef.current[key] = { encoded, decoded: value };
       }
       if (debouncedWriteRef.current) {
+        const pendingValues = pendingRef.current?.values ?? {};
+        for (const [key, value] of Object.entries(updates)) {
+          pendingValues[key] = value;
+        }
+        pendingRef.current = { values: pendingValues, prevRaw: strategy.getRaw() };
         debouncedWriteRef.current(encodedUpdates);
+        forceUpdate();
       } else {
         writeToUrl(encodedUpdates);
       }
     },
-    [params, writeToUrl]
+    [params, writeToUrl, strategy, forceUpdate]
   );
   return { values, setValues };
 }
@@ -1152,6 +1282,112 @@ function createTruncatedStringParam(defaultValue, decimals) {
     }
   };
 }
+function optFloatParam(opts = {}) {
+  const {
+    encoding = "base64",
+    decimals,
+    exp,
+    mant,
+    precision,
+    alphabet
+  } = opts;
+  if (encoding === "string") {
+    if (exp !== void 0 || mant !== void 0 || precision !== void 0) {
+      throw new Error('exp/mant/precision options are only valid with encoding: "base64"');
+    }
+  }
+  if (encoding === "base64") {
+    if (decimals !== void 0) {
+      throw new Error('decimals option is only valid with encoding: "string"');
+    }
+    const hasExpMant = exp !== void 0 || mant !== void 0;
+    const hasPrecision = precision !== void 0;
+    if (hasExpMant && hasPrecision) {
+      throw new Error("Cannot specify both exp/mant and precision");
+    }
+    if (hasExpMant) {
+      if (exp === void 0 || mant === void 0) {
+        throw new Error("Both exp and mant must be specified together");
+      }
+      return createOptLossyBase64Param({ expBits: exp, mantBits: mant }, alphabet);
+    }
+    if (hasPrecision) {
+      const { exp: e, mant: m } = parsePrecisionString(precision);
+      return createOptLossyBase64Param({ expBits: e, mantBits: m }, alphabet);
+    }
+    return createOptLosslessBase64Param(alphabet);
+  }
+  if (decimals !== void 0) {
+    return createOptTruncatedStringParam(decimals);
+  }
+  return createOptFullStringParam();
+}
+function createOptLosslessBase64Param(alphabet) {
+  const opts = alphabet ? { alphabet } : void 0;
+  return {
+    encode: (value) => {
+      if (value === null) return void 0;
+      return base64Encode(floatToBytes(value), opts);
+    },
+    decode: (encoded) => {
+      if (encoded === void 0 || encoded === "") return null;
+      try {
+        return bytesToFloat(base64Decode(encoded, opts));
+      } catch {
+        return null;
+      }
+    }
+  };
+}
+function createOptLossyBase64Param(scheme, alphabet) {
+  const opts = alphabet ? { alphabet } : void 0;
+  return {
+    encode: (value) => {
+      if (value === null) return void 0;
+      const buf = new BitBuffer();
+      buf.encodeFixedPoints([value], scheme);
+      return buf.toBase64(opts);
+    },
+    decode: (encoded) => {
+      if (encoded === void 0 || encoded === "") return null;
+      try {
+        const buf = BitBuffer.fromBase64(encoded, opts);
+        const [value] = buf.decodeFixedPoints(1, scheme);
+        return value;
+      } catch {
+        return null;
+      }
+    }
+  };
+}
+function createOptFullStringParam() {
+  return {
+    encode: (value) => {
+      if (value === null) return void 0;
+      return value.toString();
+    },
+    decode: (encoded) => {
+      if (encoded === void 0 || encoded === "") return null;
+      const parsed = parseFloat(encoded);
+      return isNaN(parsed) ? null : parsed;
+    }
+  };
+}
+function createOptTruncatedStringParam(decimals) {
+  const multiplier = Math.pow(10, decimals);
+  return {
+    encode: (value) => {
+      if (value === null) return void 0;
+      const truncated = Math.round(value * multiplier) / multiplier;
+      return truncated.toFixed(decimals);
+    },
+    decode: (encoded) => {
+      if (encoded === void 0 || encoded === "") return null;
+      const parsed = parseFloat(encoded);
+      return isNaN(parsed) ? null : parsed;
+    }
+  };
+}
 function base64FloatParam(optsOrDefault = 0) {
   const opts = typeof optsOrDefault === "number" ? { default: optsOrDefault } : optsOrDefault;
   return floatParam({ ...opts, encoding: "base64" });
@@ -1295,6 +1531,6 @@ function updateUrl(params, push = false) {
 // src/hash.ts
 setDefaultStrategy(hashStrategy);
 
-export { ALPHABETS, BASE64_CHARS, BitBuffer, precisionSchemes as PRECISION_SCHEMES, base64Decode, base64Encode, base64FloatParam, base64Param, binaryParam, boolParam, bytesToFloat, clearParams, codeParam, codesParam, createLookupMap, defStringParam, encodeFloatAllModes, encodePointAllModes, enumParam, floatParam, floatToBytes, fromFixedPoint, fromFloat, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, optIntParam, paginationParam, parseMultiParams, parseParams, pointParam, precisionSchemes, queryStrategy, resolveAlphabet, resolvePrecision, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, toFixedPoint, toFloat, updateUrl, useMultiUrlState, useMultiUrlStates, useUrlState, useUrlStates, validateAlphabet };
+export { ALPHABETS, BASE64_CHARS, BitBuffer, precisionSchemes as PRECISION_SCHEMES, base64Decode, base64Encode, base64FloatParam, base64Param, binaryParam, boolParam, bytesToFloat, clearParams, codeParam, codesParam, createLookupMap, defStringParam, encodeFloatAllModes, encodePointAllModes, enumParam, floatParam, floatToBytes, fromFixedPoint, fromFloat, getCurrentParams, getDefaultStrategy, hashStrategy, intParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, optFloatParam, optIntParam, paginationParam, parseMultiParams, parseParams, pointParam, precisionSchemes, queryStrategy, resolveAlphabet, resolvePrecision, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, toFixedPoint, toFloat, updateUrl, useMultiUrlState, useMultiUrlStates, useUrlState, useUrlStates, validateAlphabet };
 //# sourceMappingURL=hash.js.map
 //# sourceMappingURL=hash.js.map
