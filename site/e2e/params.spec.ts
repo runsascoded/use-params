@@ -125,7 +125,7 @@ test.describe('Query Params (/ route)', () => {
       await page.goBack()
       // We should be at about:blank or the previous page, not an intermediate state
       const url = page.url()
-      expect(url).not.toMatch(/localhost:5188\/\?e$/)
+      expect(url).not.toMatch(/localhost:50373\/\?e$/)
     })
   })
 
@@ -196,7 +196,7 @@ test.describe('Hash Params (/hash route)', () => {
 
     // Navigate to query mode (creates history entry)
     await page.getByRole('link', { name: 'Query params are also supported.' }).click()
-    await expect(page).toHaveURL(/^http:\/\/localhost:5188\/\?/)
+    await expect(page).toHaveURL(/^http:\/\/localhost:50373\/\?/)
 
     // Go back - should restore hash params page with state
     await page.goBack()
