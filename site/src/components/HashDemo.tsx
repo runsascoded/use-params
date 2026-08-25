@@ -15,6 +15,7 @@ import {
   multiStringParam,
   multiIntParam,
   flagPackParam,
+  datesParam,
 } from 'use-prms/hash'
 import type { Param } from 'use-prms/hash'
 
@@ -63,6 +64,7 @@ export function HashDemo() {
     },
   })
   const [flags, setFlags] = useUrlState('_', elvisFlagsParam)
+  const [dates, setDates] = useUrlState('dates', datesParam)
 
   return (
     <ParamsDemo
@@ -81,6 +83,7 @@ export function HashDemo() {
       batch={batch} setBatch={setBatch}
       materialId={materialId} setMaterialId={setMaterialId}
       flags={flags} setFlags={setFlags}
+      dates={dates} setDates={setDates}
       useUrlState={useUrlState}
     />
   )

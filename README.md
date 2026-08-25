@@ -515,6 +515,38 @@ Declaration order is canonical — `?_=HZ` decodes to the same state as `?_=ZH`,
 
 Decode is lenient: unknown letters are silently ignored (they fall under `inspectUrl`'s `stale`/`unrecognized` diagnostics when round-tripped against the spec), and multi-character flag tokens are matched longest-prefix first.
 
+## Date Sets <a id="dates"></a>
+
+`datesParam` encodes a set of ISO dates at a length someone might actually share. The naive form of a week is ~90 characters of mostly redundant digits; this says the same in 9.
+
+```typescript
+import { datesParam, useUrlState } from 'use-prms'
+
+const [dates, setDates] = useUrlState('c', datesParam)
+// ?c=260818-24 → ['2026-08-18', '2026-08-19', ..., '2026-08-24']
+```
+
+Three compressions, in order of how much they buy:
+
+1. **Runs contract.** Calendar-consecutive days collapse to `start-end`. A week costs one token whatever its length.
+2. **Digits are inherited.** Each token drops the leading digits it shares with the one before it. A token is 2 (day), 4 (month-day), 6 (2-digit year), or 8 digits (full year). The first token is never abbreviated.
+3. **The separator is a space.** `URLSearchParams` writes it as `+` and reads it back as a space, so the URL bar shows `?c=260731+0805+24-25` with nothing escaped. Decode also accepts a literal `+`.
+
+| Dates | URL |
+| ----- | --- |
+| *(empty)* | *(absent)* |
+| Aug 24, 2026 | `?c=260824` |
+| Aug 18–24, 2026 | `?c=260818-24` |
+| Jul 31, Aug 5, Aug 24–25 (2026) | `?c=260731+0805+24-25` |
+| Dec 29 2025 – Jan 1 2026 | `?c=251229-260101` |
+| Dec 31 1999, Jan 1 2100 | `?c=19991231+21000101` |
+
+Canonical form is sorted ascending and deduped — a URL is a cache key and a thing people diff by eye. Decoding is deliberately lenient: an unparseable token (invalid calendar date, backwards range, leading abbreviated token with nothing to inherit from) is skipped rather than thrown. A typo should cost one day's state, not white-screen the page.
+
+The 6-digit `YYMMDD` form hard-codes the 21st century (2000–2099). Dates outside that fall back to the 8-digit form. Values are ISO `YYYY-MM-DD` strings, not `Date`s — round-tripping a *day* through a timestamp invites exactly the local-vs-UTC bug this param exists to avoid.
+
+Also exported as pure functions for use outside React: `encodeDates(dates)` and `decodeDates(encoded)`.
+
 ## URL Diagnostics <a id="diagnostics"></a>
 
 `use-prms` can report on the relationship between the URL and your declared param spec — which keys are unrecognized, which values are malformed (decoded to default), and which are stale (parsed but in non-canonical format). Reporting and cleanup are decoupled: you can observe without acting, act without observing, or both.
@@ -738,6 +770,7 @@ type MultiParam<T> = {
 | `viewStateParam(opts)` | `Param<ViewState \| null>` | deck.gl camera state; nullable default for "no override" |
 | `tagFilterParam<T>(opts?)` | `Param<Map<T, TagState>>` | Tri-state tag filter (`'in'`/`'out'`/`'off'`) with per-tag defaults; encodes overrides only |
 | `flagPackParam<S>(spec)` | `Param<{[K in keyof S]: boolean}>` | N boolean flags packed into one key (only off-from-default letters listed, in spec-declared order) |
+| `datesParam` | `Param<string[]>` | Set of ISO `YYYY-MM-DD` dates; runs contract to `start-end`, tokens inherit shared leading digits (a week → 9 chars) |
 
 ### Built-in MultiParam Types
 

@@ -23,6 +23,7 @@ const paramColors = [
   'rgba(239, 68, 68, 0.15)',    // red
   'rgba(107, 114, 128, 0.15)',  // gray
   'rgba(132, 204, 22, 0.15)',   // lime (alias)
+  'rgba(245, 158, 11, 0.15)',   // amber (dates)
 ] as const
 
 // Stronger versions for hover
@@ -38,6 +39,7 @@ const paramColorsStrong = [
   'rgba(239, 68, 68, 0.35)',
   'rgba(107, 114, 128, 0.35)',
   'rgba(132, 204, 22, 0.35)',   // lime (alias)
+  'rgba(245, 158, 11, 0.35)',   // amber (dates)
 ] as const
 
 // Map param keys to color indices (params in same section share color)
@@ -62,6 +64,7 @@ const paramKeyColors: Record<string, number> = {
   m: 10,     // material id (alias canonical)
   mp: 10,    // material id (alias shorthand)
   _: 1,      // flag pack (reuse pink — string-ish)
+  dates: 11, // date set (datesParam)
 }
 
 // Keys that should highlight together (same section)
@@ -96,6 +99,7 @@ const paramKeySections: Record<string, string> = {
   m: 'section-alias',
   mp: 'section-alias',
   _: 'section-flagpack',
+  dates: 'section-dates',
 }
 
 // Expand a set of active keys to include all keys in the same group
@@ -213,6 +217,8 @@ export interface ParamValues {
   setMaterialId: (v: string | undefined) => void
   flags: { Z: boolean; H: boolean; A: boolean; C: boolean; L: boolean; E: boolean }
   setFlags: (v: { Z: boolean; H: boolean; A: boolean; C: boolean; L: boolean; E: boolean }) => void
+  dates: string[]
+  setDates: (v: string[]) => void
   // Hook for FloatDemo (passed from parent to use correct mode)
   useUrlState: typeof useUrlState
 }
@@ -237,6 +243,7 @@ export function ParamsDemo({
   batch, setBatch,
   materialId, setMaterialId,
   flags, setFlags,
+  dates, setDates,
   useUrlState,
 }: ParamsDemoProps) {
   const location = useLocation()
@@ -759,6 +766,9 @@ const [flags, setFlags] = useUrlState('_', elvisFlagsParam)
         </details>
       </section>
 
+      {/* Date Set */}
+      <DatesSection dates={dates} setDates={setDates} onActivate={activate('dates')} onDeactivate={deactivate} mode={mode} />
+
       {/* Debounce */}
       <DebounceSection useUrlState={useUrlState} />
 
@@ -776,6 +786,66 @@ const [flags, setFlags] = useUrlState('_', elvisFlagsParam)
       <FloatDemo useUrlState={useUrlState} />
       <MapDemo useUrlState={useUrlState} />
     </>
+  )
+}
+
+function DatesSection({
+  dates,
+  setDates,
+  onActivate,
+  onDeactivate,
+  mode,
+}: {
+  dates: string[]
+  setDates: (v: string[]) => void
+  onActivate: () => void
+  onDeactivate: () => void
+  mode: 'query' | 'hash'
+}) {
+  const prefix = mode === 'hash' ? '/hash#' : '/?'
+  // Fixed anchor week so the presets are stable regardless of when someone loads the page
+  const week = ['2026-08-18', '2026-08-19', '2026-08-20', '2026-08-21', '2026-08-22', '2026-08-23', '2026-08-24']
+  const scatter = ['2026-07-31', '2026-08-05', '2026-08-24', '2026-08-25']
+  const yearBoundary = ['2025-12-29', '2025-12-30', '2025-12-31', '2026-01-01']
+
+  return (
+    <section id="section-dates" className="section" style={{ backgroundColor: dates.length ? 'transparent' : undefined }} onMouseEnter={onActivate} onMouseLeave={onDeactivate}>
+      <h2>Date Sets (datesParam)</h2>
+      <p className="section-intro">
+        A set of ISO dates compressed via run-contraction and shared-digit inheritance. A week of URL-selected days costs 9 characters, not 90.
+      </p>
+      <div className="controls">
+        <button onClick={() => setDates(week)}>Week (Aug 18–24, 2026)</button>
+        <button onClick={() => setDates(scatter)}>Scatter (Jul 31, Aug 5, 24–25)</button>
+        <button onClick={() => setDates(yearBoundary)}>Year boundary (Dec 29 – Jan 1)</button>
+        <button onClick={() => setDates([])}>Clear</button>
+      </div>
+      <div className="controls" style={{ marginTop: '0.5rem' }}>
+        <div style={{ fontSize: '0.85rem', opacity: 0.85 }}>
+          <strong>{dates.length}</strong> date{dates.length === 1 ? '' : 's'}:{' '}
+          {dates.length === 0
+            ? <em style={{ opacity: 0.7 }}>(none — param absent from URL)</em>
+            : <code>{dates.join(', ')}</code>}
+        </div>
+      </div>
+      <div style={{ marginTop: '0.5rem', fontSize: '0.85rem' }}>
+        Or try these URLs directly:
+        <ul style={{ margin: '0.25rem 0 0 1.2rem', padding: 0 }}>
+          <li><Link to={`${prefix}dates=260818-24`} className="example-url">?dates=260818-24</Link> <span style={{ opacity: 0.7 }}>→ a whole week</span></li>
+          <li><Link to={`${prefix}dates=260731+0805+24-25`} className="example-url">?dates=260731+0805+24-25</Link> <span style={{ opacity: 0.7 }}>→ scatter with inherited digits</span></li>
+          <li><Link to={`${prefix}dates=251229-260101`} className="example-url">?dates=251229-260101</Link> <span style={{ opacity: 0.7 }}>→ run across a year boundary</span></li>
+        </ul>
+      </div>
+      <details className="code-sample">
+        <summary>Code</summary>
+        <pre>{`import { datesParam, useUrlState } from 'use-prms'
+
+const [dates, setDates] = useUrlState('dates', datesParam)
+// ?dates=260818-24 → ['2026-08-18', ..., '2026-08-24']
+// ?dates=260731+0805+24-25 → Jul 31, Aug 5, Aug 24, Aug 25 (2026)
+// (empty set) → param absent from URL`}</pre>
+      </details>
+    </section>
   )
 }
 

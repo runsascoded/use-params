@@ -15,6 +15,7 @@ import {
   multiStringParam,
   multiIntParam,
   flagPackParam,
+  datesParam,
 } from 'use-prms'
 import type { Param } from 'use-prms'
 
@@ -64,6 +65,7 @@ export function Home() {
     },
   })
   const [flags, setFlags] = useUrlState('_', elvisFlagsParam)
+  const [dates, setDates] = useUrlState('dates', datesParam)
 
   return (
     <ParamsDemo
@@ -82,6 +84,7 @@ export function Home() {
       batch={batch} setBatch={setBatch}
       materialId={materialId} setMaterialId={setMaterialId}
       flags={flags} setFlags={setFlags}
+      dates={dates} setDates={setDates}
       useUrlState={useUrlState}
     />
   )
