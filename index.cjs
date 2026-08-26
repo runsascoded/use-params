@@ -410,14 +410,14 @@ function cleanUrl(params, policy = {}, strategy = getDefaultStrategy()) {
 }
 
 // src/useUrlState.ts
-function debounce(fn, ms) {
+function debounce(fn, ms2) {
   let timeoutId = null;
   const debounced = ((...args) => {
     if (timeoutId) clearTimeout(timeoutId);
     timeoutId = setTimeout(() => {
       timeoutId = null;
       fn(...args);
-    }, ms);
+    }, ms2);
   });
   debounced.cancel = () => {
     if (timeoutId) {
@@ -1153,6 +1153,80 @@ function bytesToFloat(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   return view.getFloat64(0, false);
 }
+
+// src/dates.ts
+var DAY_MS = 864e5;
+var TOKEN = /^(\d{2}|\d{4}|\d{6}|\d{8})(?:-(\d{2}|\d{4}|\d{6}|\d{8}))?$/;
+function ms(date) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(date) ? Date.parse(`${date}T00:00:00Z`) : NaN;
+}
+function iso(t) {
+  return new Date(t).toISOString().slice(0, 10);
+}
+function expand(token, prev) {
+  const full = token.length === 8 ? token : token.length === 6 ? `20${token}` : prev === null ? null : prev.replace(/-/g, "").slice(0, 8 - token.length) + token;
+  if (full === null) return null;
+  const date = `${full.slice(0, 4)}-${full.slice(4, 6)}-${full.slice(6)}`;
+  const t = ms(date);
+  return !isNaN(t) && iso(t) === date ? date : null;
+}
+function contract(date, prev) {
+  const d = date.replace(/-/g, "");
+  if (prev === null) return d.startsWith("20") ? d.slice(2) : d;
+  const p = prev.replace(/-/g, "");
+  if (p.slice(0, 6) === d.slice(0, 6)) return d.slice(6);
+  if (p.slice(0, 4) === d.slice(0, 4)) return d.slice(4);
+  return d.startsWith("20") ? d.slice(2) : d;
+}
+function encodeDates(dates) {
+  const sorted = [...new Set(dates)].map(ms).filter((t) => !isNaN(t)).sort((a, b) => a - b);
+  if (!sorted.length) return void 0;
+  const runs = [];
+  for (const t of sorted) {
+    const last = runs[runs.length - 1];
+    if (last && t === last[1] + DAY_MS) last[1] = t;
+    else runs.push([t, t]);
+  }
+  const tokens = [];
+  let prev = null;
+  for (const [from, to] of runs) {
+    const start = iso(from);
+    let token = contract(start, prev);
+    prev = start;
+    if (to !== from) {
+      const end = iso(to);
+      token += `-${contract(end, prev)}`;
+      prev = end;
+    }
+    tokens.push(token);
+  }
+  return tokens.join(" ");
+}
+function decodeDates(encoded) {
+  if (!encoded) return [];
+  const out = [];
+  let prev = null;
+  for (const token of encoded.split(/[\s+]+/).filter(Boolean)) {
+    const m = TOKEN.exec(token);
+    if (!m) continue;
+    const start = expand(m[1], prev);
+    if (!start) continue;
+    prev = start;
+    if (m[2] === void 0) {
+      out.push(start);
+      continue;
+    }
+    const end = expand(m[2], start);
+    if (!end || ms(end) < ms(start)) {
+      out.push(start);
+      continue;
+    }
+    for (let t = ms(start); t <= ms(end); t += DAY_MS) out.push(iso(t));
+    prev = end;
+  }
+  return [...new Set(out)];
+}
+var datesParam = { encode: encodeDates, decode: decodeDates };
 
 // src/numberTuple.ts
 function formatSignedParts(parts, delimiter, signDelim) {
@@ -2100,8 +2174,11 @@ exports.codeParam = codeParam;
 exports.codesParam = codesParam;
 exports.createLookupMap = createLookupMap;
 exports.cycleTagFilter = cycleTagFilter;
+exports.datesParam = datesParam;
+exports.decodeDates = decodeDates;
 exports.defStringParam = defStringParam;
 exports.effectiveTagState = effectiveTagState;
+exports.encodeDates = encodeDates;
 exports.encodeFloatAllModes = encodeFloatAllModes;
 exports.encodePointAllModes = encodePointAllModes;
 exports.enumParam = enumParam;

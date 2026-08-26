@@ -748,6 +748,68 @@ declare function floatToBytes(value: number): Uint8Array;
 declare function bytesToFloat(bytes: Uint8Array): number;
 
 /**
+ * `datesParam`: a set of ISO dates in a URL, contracted to runs.
+ *
+ * The naive encoding of a week is ~90 chars of mostly redundant digits
+ * (`?c=2026-08-18%2C…%2C2026-08-24`); this says the same in 9
+ * (`?c=260818-24`). Three compressions, in order of how much they buy:
+ *
+ * 1. **Runs contract.** Calendar-consecutive days collapse to `start-end`.
+ *    A week costs one token regardless of its length — and a week is the
+ *    common case.
+ * 2. **Digits are inherited.** Each token drops the leading digits it
+ *    shares with the one before it: `260731 0805 24-25` is Jul 31, Aug 5,
+ *    Aug 24–25 of 2026. A token is 2 (day), 4 (month-day), 6 (2-digit
+ *    year), or 8 digits (full year, escape hatch for outside 2000–2099).
+ *    The first token is never abbreviated.
+ * 3. **The separator is a space.** `URLSearchParams` writes it as `+` and
+ *    reads it back as a space, so the URL bar shows `?c=260731+0805+24-25`
+ *    with nothing escaped. Decode also accepts a literal `+`, in case
+ *    something hands the raw query string over un-decoded.
+ *
+ * Canonical form is sorted ascending and deduped — a URL is a cache key
+ * and a thing people diff by eye. Empty set ⇒ `undefined` (param absent).
+ *
+ * Decoding is deliberately lenient: an unparseable token is skipped, not
+ * thrown. This is a hand-editable URL and a typo should cost one day's
+ * state rather than white-screening the page.
+ *
+ * The 6-digit `YYMMDD` form is a Y2K-shaped decision: it hard-codes the
+ * 21st century. Dates outside 2000–2099 fall back to the 8-digit form
+ * (`19991231 21000101`) — that path is untested by daily use, so treat it
+ * as the escape hatch it is.
+ *
+ * Values are ISO `YYYY-MM-DD` strings, not `Date`s: `Date` is a timestamp
+ * and a selected *day* is not one — round-tripping through `Date` invites
+ * exactly the local-vs-UTC bug this param exists to avoid. Consumers who
+ * want `Date`s can map.
+ */
+
+/**
+ * Encode a set of ISO dates. Sorted ascending, deduped, invalid entries
+ * dropped. Empty result → `undefined` (param absent from the URL).
+ */
+declare function encodeDates(dates: readonly string[]): string | undefined;
+/**
+ * Decode a `datesParam` string to an ascending, deduped array of ISO
+ * dates. Malformed tokens (unparseable, invalid calendar date, backwards
+ * range) are skipped rather than thrown. Accepts both `' '` and `'+'` as
+ * separators.
+ */
+declare function decodeDates(encoded: string | undefined): string[];
+/**
+ * `use-prms` `Param` for a set of ISO dates. See module docs for the
+ * encoding.
+ *
+ * @example
+ * ```ts
+ * const [dates, setDates] = useUrlState('c', datesParam)
+ * // ?c=260818-24 → ['2026-08-18', ..., '2026-08-24']
+ * ```
+ */
+declare const datesParam: Param<string[]>;
+
+/**
  * Float encoding utilities for compact URL parameters
  *
  * Provides IEEE 754 decomposition, fixed-point conversion, and bit-level packing
@@ -1421,4 +1483,4 @@ declare function getCurrentParams(): Record<string, Encoded>;
  */
 declare function updateUrl(params: Record<string, Encoded>, push?: boolean): void;
 
-export { ALPHABETS, type AliasConflictMode, type AliasInput, type AliasMergeResult, type Alphabet, type AlphabetName, BASE64_CHARS, type BBox, type BBoxParamOptions, type Base64Options, type BinaryParamOptions, BitBuffer, type CleanUrlPolicy, type CodeMap, DEFAULT_TAG_CYCLE, type DeprecatedInfo, type DeprecatedMigration, type DeprecatedSpec, type Encoded, type FixedPoint, type FlagPackSpec, type FlagPackValues, type Float, type FloatEncoding, type FloatParamOptions, type InspectUrlOptions, type KeyedDiagnostic, type LLZ, type LLZParamOptions, type LocationStrategy, type MultiEncoded, type MultiParam, type NumberFieldEncoding, type NumberPath, type NumberTupleField, type NumberTupleParamOptions, precisionSchemes as PRECISION_SCHEMES, type Pagination, type Param, type ParamDiagnostic, type ParamValues, type Params, type Point, type PointParamOptions, type PrecisionScheme, type TagDefaults, type TagFilterParamOptions, type TagFilters, type TagPrefixes, type TagState, type UrlDiagnostics, type UseUrlStateOptions, type UseUrlStatesOptions, type ViewState, type ViewStateParamOptions, base64Decode, base64Encode, base64FloatParam, base64Param, bboxParam, binaryParam, boolParam, bytesToFloat, classifyParam, cleanUrl, clearParams, codeParam, codesParam, createLookupMap, cycleTagFilter, defStringParam, effectiveTagState, encodeFloatAllModes, encodePointAllModes, enumParam, flagPackParam, floatParam, floatToBytes, formatSignedParts, fromFixedPoint, fromFloat, getCurrentParams, getDefaultStrategy, hashStrategy, inspectUrl, intParam, llzParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, numberTupleParam, optFloatParam, optIntParam, paginationParam, parseMultiParams, parseParams, parseSignedParts, pointParam, precisionSchemes, queryStrategy, resolveAlphabet, resolvePrecision, runPassesTagFilters, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, tagFilterParam, toFixedPoint, toFloat, updateUrl, useMultiUrlState, useMultiUrlStates, useUrlAlias, useUrlState, useUrlStates, validateAlphabet, viewStateParam };
+export { ALPHABETS, type AliasConflictMode, type AliasInput, type AliasMergeResult, type Alphabet, type AlphabetName, BASE64_CHARS, type BBox, type BBoxParamOptions, type Base64Options, type BinaryParamOptions, BitBuffer, type CleanUrlPolicy, type CodeMap, DEFAULT_TAG_CYCLE, type DeprecatedInfo, type DeprecatedMigration, type DeprecatedSpec, type Encoded, type FixedPoint, type FlagPackSpec, type FlagPackValues, type Float, type FloatEncoding, type FloatParamOptions, type InspectUrlOptions, type KeyedDiagnostic, type LLZ, type LLZParamOptions, type LocationStrategy, type MultiEncoded, type MultiParam, type NumberFieldEncoding, type NumberPath, type NumberTupleField, type NumberTupleParamOptions, precisionSchemes as PRECISION_SCHEMES, type Pagination, type Param, type ParamDiagnostic, type ParamValues, type Params, type Point, type PointParamOptions, type PrecisionScheme, type TagDefaults, type TagFilterParamOptions, type TagFilters, type TagPrefixes, type TagState, type UrlDiagnostics, type UseUrlStateOptions, type UseUrlStatesOptions, type ViewState, type ViewStateParamOptions, base64Decode, base64Encode, base64FloatParam, base64Param, bboxParam, binaryParam, boolParam, bytesToFloat, classifyParam, cleanUrl, clearParams, codeParam, codesParam, createLookupMap, cycleTagFilter, datesParam, decodeDates, defStringParam, effectiveTagState, encodeDates, encodeFloatAllModes, encodePointAllModes, enumParam, flagPackParam, floatParam, floatToBytes, formatSignedParts, fromFixedPoint, fromFloat, getCurrentParams, getDefaultStrategy, hashStrategy, inspectUrl, intParam, llzParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, numberTupleParam, optFloatParam, optIntParam, paginationParam, parseMultiParams, parseParams, parseSignedParts, pointParam, precisionSchemes, queryStrategy, resolveAlphabet, resolvePrecision, runPassesTagFilters, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, tagFilterParam, toFixedPoint, toFloat, updateUrl, useMultiUrlState, useMultiUrlStates, useUrlAlias, useUrlState, useUrlStates, validateAlphabet, viewStateParam };
