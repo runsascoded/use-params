@@ -1154,7 +1154,7 @@ function bytesToFloat(bytes) {
 
 // src/dates.ts
 var DAY_MS = 864e5;
-var TOKEN = /^(\d{2}|\d{4}|\d{6}|\d{8})(?:-(\d{2}|\d{4}|\d{6}|\d{8}))?$/;
+var TOKEN = /^(?:(\d{2}|\d{4}|\d{6}|\d{8})-(\d{2}|\d{4}|\d{6}|\d{8})|(\d{2}|\d{4}|\d{6}|\d{8})-|-(\d{2}|\d{4}|\d{6}|\d{8})|(\d{2}|\d{4}|\d{6}|\d{8}))$/;
 function ms(date) {
   return /^\d{4}-\d{2}-\d{2}$/.test(date) ? Date.parse(`${date}T00:00:00Z`) : NaN;
 }
@@ -1176,7 +1176,11 @@ function contract(date, prev) {
   if (p.slice(0, 4) === d.slice(0, 4)) return d.slice(4);
   return d.startsWith("20") ? d.slice(2) : d;
 }
-function encodeDates(dates) {
+function resolve(d) {
+  const v = typeof d === "function" ? d() : d;
+  return v !== void 0 && !isNaN(ms(v)) ? v : void 0;
+}
+function encodeDates(dates, options = {}) {
   const sorted = [...new Set(dates)].map(ms).filter((t) => !isNaN(t)).sort((a, b) => a - b);
   if (!sorted.length) return void 0;
   const runs = [];
@@ -1185,10 +1189,25 @@ function encodeDates(dates) {
     if (last && t === last[1] + DAY_MS) last[1] = t;
     else runs.push([t, t]);
   }
+  const latest = resolve(options.latest);
+  const genesis = resolve(options.genesis);
+  const latestMs = latest !== void 0 ? ms(latest) : void 0;
+  const genesisMs = genesis !== void 0 ? ms(genesis) : void 0;
   const tokens = [];
   let prev = null;
   for (const [from, to] of runs) {
     const start = iso(from);
+    if (to !== from && latestMs !== void 0 && to === latestMs) {
+      tokens.push(`${contract(start, prev)}-`);
+      prev = latest;
+      continue;
+    }
+    if (to !== from && genesisMs !== void 0 && from === genesisMs) {
+      const end = iso(to);
+      tokens.push(`-${contract(end, genesis)}`);
+      prev = end;
+      continue;
+    }
     let token = contract(start, prev);
     prev = start;
     if (to !== from) {
@@ -1200,23 +1219,39 @@ function encodeDates(dates) {
   }
   return tokens.join(" ");
 }
-function decodeDates(encoded) {
+function decodeDates(encoded, options = {}) {
   if (!encoded) return [];
+  const latest = resolve(options.latest);
+  const genesis = resolve(options.genesis);
   const out = [];
   let prev = null;
   for (const token of encoded.split(/[\s+]+/).filter(Boolean)) {
     const m = TOKEN.exec(token);
     if (!m) continue;
-    const start = expand(m[1], prev);
-    if (!start) continue;
-    prev = start;
-    if (m[2] === void 0) {
-      out.push(start);
-      continue;
+    const [, bothStart, bothEnd, startOnly, endOnly, single] = m;
+    let start = null;
+    let end = null;
+    if (single !== void 0) {
+      start = expand(single, prev);
+      end = start;
+    } else if (bothStart !== void 0) {
+      start = expand(bothStart, prev);
+      if (!start) continue;
+      end = expand(bothEnd, start);
+    } else if (startOnly !== void 0) {
+      if (latest === void 0) continue;
+      start = expand(startOnly, prev);
+      if (!start) continue;
+      end = latest;
+    } else if (endOnly !== void 0) {
+      if (genesis === void 0) continue;
+      start = genesis;
+      end = expand(endOnly, genesis);
     }
-    const end = expand(m[2], start);
-    if (!end || ms(end) < ms(start)) {
+    if (!start || !end) continue;
+    if (ms(end) < ms(start)) {
       out.push(start);
+      prev = start;
       continue;
     }
     for (let t = ms(start); t <= ms(end); t += DAY_MS) out.push(iso(t));
@@ -1224,7 +1259,12 @@ function decodeDates(encoded) {
   }
   return [...new Set(out)];
 }
-var datesParam = { encode: encodeDates, decode: decodeDates };
+function datesParam(options = {}) {
+  return {
+    encode: (dates) => encodeDates(dates, options),
+    decode: (encoded) => decodeDates(encoded, options)
+  };
+}
 
 // src/numberTuple.ts
 function formatSignedParts(parts, delimiter, signDelim) {

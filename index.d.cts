@@ -774,6 +774,28 @@ declare function bytesToFloat(bytes: Uint8Array): number;
  * thrown. This is a hand-editable URL and a typo should cost one day's
  * state rather than white-screening the page.
  *
+ * ## Half-open ranges
+ *
+ * Pass `latest` and/or `genesis` to make ranges that touch the domain's
+ * ends drop that end from the URL:
+ *
+ * - `latest`: a run whose *end* matches it encodes as `start-` (trailing
+ *   dash). `?c=260818-` = "Aug 18 through today", and "today" is resolved
+ *   fresh on every decode — so the URL keeps meaning "through today" as
+ *   the calendar moves.
+ * - `genesis`: a run whose *start* matches it encodes as `-end` (leading
+ *   dash). `?c=-260824` = "from the beginning of the domain through Aug
+ *   24".
+ *
+ * Both accept a `string` (fixed) or a `() => string` (resolved lazily on
+ * each encode/decode). Encoded strings written without a matching option
+ * decode to nothing — a half-open token with no anchor is a lenient
+ * skip, same as any other malformed token.
+ *
+ * Single-day selections that land on `latest` or `genesis` still encode
+ * as a single date (`260826`), never as `260826-` or `-260826` — a
+ * lone-dash suffix on a single day would just be noise.
+ *
  * The 6-digit `YYMMDD` form is a Y2K-shaped decision: it hard-codes the
  * 21st century. Dates outside 2000–2099 fall back to the 8-digit form
  * (`19991231 21000101`) — that path is untested by daily use, so treat it
@@ -786,28 +808,56 @@ declare function bytesToFloat(bytes: Uint8Array): number;
  */
 
 /**
+ * A fixed ISO date, or a `() => ISO date` that's resolved lazily on every
+ * encode/decode. Use the callback form when the anchor should track
+ * "now" — e.g. `latest: () => new Date().toISOString().slice(0, 10)`.
+ */
+type DateOrGetter = string | (() => string);
+interface DatesParamOptions {
+    /**
+     * If set, a run whose end matches this date encodes as `start-`, and a
+     * `D-` token on decode expands to a range ending here.
+     */
+    latest?: DateOrGetter;
+    /**
+     * If set, a run whose start matches this date encodes as `-end`, and a
+     * `-D` token on decode expands to a range starting here.
+     */
+    genesis?: DateOrGetter;
+}
+/**
  * Encode a set of ISO dates. Sorted ascending, deduped, invalid entries
  * dropped. Empty result → `undefined` (param absent from the URL).
+ *
+ * With `options.latest` or `options.genesis`, runs whose end or start
+ * matches contract to `start-` or `-end` respectively; the `latest` form
+ * is preferred when both would apply. Single-day runs are never
+ * half-open — a lone day at the boundary stays as its own date.
  */
-declare function encodeDates(dates: readonly string[]): string | undefined;
+declare function encodeDates(dates: readonly string[], options?: DatesParamOptions): string | undefined;
 /**
  * Decode a `datesParam` string to an ascending, deduped array of ISO
  * dates. Malformed tokens (unparseable, invalid calendar date, backwards
- * range) are skipped rather than thrown. Accepts both `' '` and `'+'` as
- * separators.
+ * range, half-open with no matching anchor) are skipped rather than
+ * thrown. Accepts both `' '` and `'+'` as separators.
  */
-declare function decodeDates(encoded: string | undefined): string[];
+declare function decodeDates(encoded: string | undefined, options?: DatesParamOptions): string[];
 /**
  * `use-prms` `Param` for a set of ISO dates. See module docs for the
  * encoding.
  *
  * @example
  * ```ts
- * const [dates, setDates] = useUrlState('c', datesParam)
+ * const [dates, setDates] = useUrlState('c', datesParam())
  * // ?c=260818-24 → ['2026-08-18', ..., '2026-08-24']
+ *
+ * // With half-open anchors:
+ * const today = () => new Date().toISOString().slice(0, 10)
+ * const [dates, setDates] = useUrlState('c', datesParam({ latest: today }))
+ * // ?c=260818- → Aug 18 through today (resolved on every decode)
  * ```
  */
-declare const datesParam: Param<string[]>;
+declare function datesParam(options?: DatesParamOptions): Param<string[]>;
 
 /**
  * Float encoding utilities for compact URL parameters
@@ -1483,4 +1533,4 @@ declare function getCurrentParams(): Record<string, Encoded>;
  */
 declare function updateUrl(params: Record<string, Encoded>, push?: boolean): void;
 
-export { ALPHABETS, type AliasConflictMode, type AliasInput, type AliasMergeResult, type Alphabet, type AlphabetName, BASE64_CHARS, type BBox, type BBoxParamOptions, type Base64Options, type BinaryParamOptions, BitBuffer, type CleanUrlPolicy, type CodeMap, DEFAULT_TAG_CYCLE, type DeprecatedInfo, type DeprecatedMigration, type DeprecatedSpec, type Encoded, type FixedPoint, type FlagPackSpec, type FlagPackValues, type Float, type FloatEncoding, type FloatParamOptions, type InspectUrlOptions, type KeyedDiagnostic, type LLZ, type LLZParamOptions, type LocationStrategy, type MultiEncoded, type MultiParam, type NumberFieldEncoding, type NumberPath, type NumberTupleField, type NumberTupleParamOptions, precisionSchemes as PRECISION_SCHEMES, type Pagination, type Param, type ParamDiagnostic, type ParamValues, type Params, type Point, type PointParamOptions, type PrecisionScheme, type TagDefaults, type TagFilterParamOptions, type TagFilters, type TagPrefixes, type TagState, type UrlDiagnostics, type UseUrlStateOptions, type UseUrlStatesOptions, type ViewState, type ViewStateParamOptions, base64Decode, base64Encode, base64FloatParam, base64Param, bboxParam, binaryParam, boolParam, bytesToFloat, classifyParam, cleanUrl, clearParams, codeParam, codesParam, createLookupMap, cycleTagFilter, datesParam, decodeDates, defStringParam, effectiveTagState, encodeDates, encodeFloatAllModes, encodePointAllModes, enumParam, flagPackParam, floatParam, floatToBytes, formatSignedParts, fromFixedPoint, fromFloat, getCurrentParams, getDefaultStrategy, hashStrategy, inspectUrl, intParam, llzParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, numberTupleParam, optFloatParam, optIntParam, paginationParam, parseMultiParams, parseParams, parseSignedParts, pointParam, precisionSchemes, queryStrategy, resolveAlphabet, resolvePrecision, runPassesTagFilters, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, tagFilterParam, toFixedPoint, toFloat, updateUrl, useMultiUrlState, useMultiUrlStates, useUrlAlias, useUrlState, useUrlStates, validateAlphabet, viewStateParam };
+export { ALPHABETS, type AliasConflictMode, type AliasInput, type AliasMergeResult, type Alphabet, type AlphabetName, BASE64_CHARS, type BBox, type BBoxParamOptions, type Base64Options, type BinaryParamOptions, BitBuffer, type CleanUrlPolicy, type CodeMap, DEFAULT_TAG_CYCLE, type DateOrGetter, type DatesParamOptions, type DeprecatedInfo, type DeprecatedMigration, type DeprecatedSpec, type Encoded, type FixedPoint, type FlagPackSpec, type FlagPackValues, type Float, type FloatEncoding, type FloatParamOptions, type InspectUrlOptions, type KeyedDiagnostic, type LLZ, type LLZParamOptions, type LocationStrategy, type MultiEncoded, type MultiParam, type NumberFieldEncoding, type NumberPath, type NumberTupleField, type NumberTupleParamOptions, precisionSchemes as PRECISION_SCHEMES, type Pagination, type Param, type ParamDiagnostic, type ParamValues, type Params, type Point, type PointParamOptions, type PrecisionScheme, type TagDefaults, type TagFilterParamOptions, type TagFilters, type TagPrefixes, type TagState, type UrlDiagnostics, type UseUrlStateOptions, type UseUrlStatesOptions, type ViewState, type ViewStateParamOptions, base64Decode, base64Encode, base64FloatParam, base64Param, bboxParam, binaryParam, boolParam, bytesToFloat, classifyParam, cleanUrl, clearParams, codeParam, codesParam, createLookupMap, cycleTagFilter, datesParam, decodeDates, defStringParam, effectiveTagState, encodeDates, encodeFloatAllModes, encodePointAllModes, enumParam, flagPackParam, floatParam, floatToBytes, formatSignedParts, fromFixedPoint, fromFloat, getCurrentParams, getDefaultStrategy, hashStrategy, inspectUrl, intParam, llzParam, multiFloatParam, multiIntParam, multiStringParam, notifyLocationChange, numberArrayParam, numberTupleParam, optFloatParam, optIntParam, paginationParam, parseMultiParams, parseParams, parseSignedParts, pointParam, precisionSchemes, queryStrategy, resolveAlphabet, resolvePrecision, runPassesTagFilters, serializeMultiParams, serializeParams, setDefaultStrategy, stringParam, stringsParam, tagFilterParam, toFixedPoint, toFloat, updateUrl, useMultiUrlState, useMultiUrlStates, useUrlAlias, useUrlState, useUrlStates, validateAlphabet, viewStateParam };
