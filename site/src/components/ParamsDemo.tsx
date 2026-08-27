@@ -840,10 +840,15 @@ function DatesSection({
         <summary>Code</summary>
         <pre>{`import { datesParam, useUrlState } from 'use-prms'
 
-const [dates, setDates] = useUrlState('dates', datesParam)
+const [dates, setDates] = useUrlState('dates', datesParam())
 // ?dates=260818-24 → ['2026-08-18', ..., '2026-08-24']
 // ?dates=260731+0805+24-25 → Jul 31, Aug 5, Aug 24, Aug 25 (2026)
-// (empty set) → param absent from URL`}</pre>
+// (empty set) → param absent from URL
+
+// Half-open ranges: pass a 'latest' or 'genesis' anchor
+const today = () => new Date().toISOString().slice(0, 10)
+const [dates, setDates] = useUrlState('dates', datesParam({ latest: today }))
+// ?dates=260818- → Aug 18 through today (resolved on every decode)`}</pre>
       </details>
     </section>
   )

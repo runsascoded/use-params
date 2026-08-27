@@ -25,6 +25,28 @@
  * thrown. This is a hand-editable URL and a typo should cost one day's
  * state rather than white-screening the page.
  *
+ * ## Half-open ranges
+ *
+ * Pass `latest` and/or `genesis` to make ranges that touch the domain's
+ * ends drop that end from the URL:
+ *
+ * - `latest`: a run whose *end* matches it encodes as `start-` (trailing
+ *   dash). `?c=260818-` = "Aug 18 through today", and "today" is resolved
+ *   fresh on every decode — so the URL keeps meaning "through today" as
+ *   the calendar moves.
+ * - `genesis`: a run whose *start* matches it encodes as `-end` (leading
+ *   dash). `?c=-260824` = "from the beginning of the domain through Aug
+ *   24".
+ *
+ * Both accept a `string` (fixed) or a `() => string` (resolved lazily on
+ * each encode/decode). Encoded strings written without a matching option
+ * decode to nothing — a half-open token with no anchor is a lenient
+ * skip, same as any other malformed token.
+ *
+ * Single-day selections that land on `latest` or `genesis` still encode
+ * as a single date (`260826`), never as `260826-` or `-260826` — a
+ * lone-dash suffix on a single day would just be noise.
+ *
  * The 6-digit `YYMMDD` form is a Y2K-shaped decision: it hard-codes the
  * 21st century. Dates outside 2000–2099 fall back to the 8-digit form
  * (`19991231 21000101`) — that path is untested by daily use, so treat it
@@ -39,7 +61,15 @@
 import type { Param } from './index.js'
 
 const DAY_MS = 86_400_000
-const TOKEN = /^(\d{2}|\d{4}|\d{6}|\d{8})(?:-(\d{2}|\d{4}|\d{6}|\d{8}))?$/
+/**
+ * Four token shapes, in one regex:
+ *   `D-D`  both-ended range
+ *   `D-`   right half-open (needs a `latest` in scope on decode)
+ *   `-D`   left half-open (needs a `genesis` in scope on decode)
+ *   `D`    single date
+ * where `D` is 2, 4, 6, or 8 digits.
+ */
+const TOKEN = /^(?:(\d{2}|\d{4}|\d{6}|\d{8})-(\d{2}|\d{4}|\d{6}|\d{8})|(\d{2}|\d{4}|\d{6}|\d{8})-|-(\d{2}|\d{4}|\d{6}|\d{8})|(\d{2}|\d{4}|\d{6}|\d{8}))$/
 
 /** ISO `YYYY-MM-DD` → UTC ms; `NaN` if the string isn't a well-formed ISO date. */
 function ms(date: string): number {
@@ -74,10 +104,40 @@ function contract(date: string, prev: string | null): string {
 }
 
 /**
+ * A fixed ISO date, or a `() => ISO date` that's resolved lazily on every
+ * encode/decode. Use the callback form when the anchor should track
+ * "now" — e.g. `latest: () => new Date().toISOString().slice(0, 10)`.
+ */
+export type DateOrGetter = string | (() => string)
+
+export interface DatesParamOptions {
+  /**
+   * If set, a run whose end matches this date encodes as `start-`, and a
+   * `D-` token on decode expands to a range ending here.
+   */
+  latest?: DateOrGetter
+  /**
+   * If set, a run whose start matches this date encodes as `-end`, and a
+   * `-D` token on decode expands to a range starting here.
+   */
+  genesis?: DateOrGetter
+}
+
+function resolve(d: DateOrGetter | undefined): string | undefined {
+  const v = typeof d === 'function' ? d() : d
+  return v !== undefined && !isNaN(ms(v)) ? v : undefined
+}
+
+/**
  * Encode a set of ISO dates. Sorted ascending, deduped, invalid entries
  * dropped. Empty result → `undefined` (param absent from the URL).
+ *
+ * With `options.latest` or `options.genesis`, runs whose end or start
+ * matches contract to `start-` or `-end` respectively; the `latest` form
+ * is preferred when both would apply. Single-day runs are never
+ * half-open — a lone day at the boundary stays as its own date.
  */
-export function encodeDates(dates: readonly string[]): string | undefined {
+export function encodeDates(dates: readonly string[], options: DatesParamOptions = {}): string | undefined {
   const sorted = [...new Set(dates)].map(ms).filter(t => !isNaN(t)).sort((a, b) => a - b)
   if (!sorted.length) return undefined
   // Contract calendar-consecutive days into runs before encoding either end
@@ -87,10 +147,27 @@ export function encodeDates(dates: readonly string[]): string | undefined {
     if (last && t === last[1] + DAY_MS) last[1] = t
     else runs.push([t, t])
   }
+  const latest = resolve(options.latest)
+  const genesis = resolve(options.genesis)
+  const latestMs = latest !== undefined ? ms(latest) : undefined
+  const genesisMs = genesis !== undefined ? ms(genesis) : undefined
   const tokens: string[] = []
   let prev: string | null = null
   for (const [from, to] of runs) {
     const start = iso(from)
+    if (to !== from && latestMs !== undefined && to === latestMs) {
+      // D- : the end is `latest`, and the decoder will use `latest` as prev going forward
+      tokens.push(`${contract(start, prev)}-`)
+      prev = latest!
+      continue
+    }
+    if (to !== from && genesisMs !== undefined && from === genesisMs) {
+      // -D : the decoder uses `genesis` as prev to expand the end token
+      const end = iso(to)
+      tokens.push(`-${contract(end, genesis!)}`)
+      prev = end
+      continue
+    }
     let token = contract(start, prev)
     prev = start
     if (to !== from) {
@@ -106,26 +183,41 @@ export function encodeDates(dates: readonly string[]): string | undefined {
 /**
  * Decode a `datesParam` string to an ascending, deduped array of ISO
  * dates. Malformed tokens (unparseable, invalid calendar date, backwards
- * range) are skipped rather than thrown. Accepts both `' '` and `'+'` as
- * separators.
+ * range, half-open with no matching anchor) are skipped rather than
+ * thrown. Accepts both `' '` and `'+'` as separators.
  */
-export function decodeDates(encoded: string | undefined): string[] {
+export function decodeDates(encoded: string | undefined, options: DatesParamOptions = {}): string[] {
   if (!encoded) return []
+  const latest = resolve(options.latest)
+  const genesis = resolve(options.genesis)
   const out: string[] = []
   let prev: string | null = null
   for (const token of encoded.split(/[\s+]+/).filter(Boolean)) {
     const m = TOKEN.exec(token)
     if (!m) continue
-    const start = expand(m[1], prev)
-    if (!start) continue
-    prev = start
-    if (m[2] === undefined) {
-      out.push(start)
-      continue
+    const [, bothStart, bothEnd, startOnly, endOnly, single] = m
+    let start: string | null = null
+    let end: string | null = null
+    if (single !== undefined) {
+      start = expand(single, prev)
+      end = start
+    } else if (bothStart !== undefined) {
+      start = expand(bothStart, prev)
+      if (!start) continue
+      end = expand(bothEnd, start)
+    } else if (startOnly !== undefined) {
+      if (latest === undefined) continue
+      start = expand(startOnly, prev)
+      if (!start) continue
+      end = latest
+    } else if (endOnly !== undefined) {
+      if (genesis === undefined) continue
+      start = genesis
+      end = expand(endOnly, genesis)
     }
-    const end = expand(m[2], start)
+    if (!start || !end) continue
     // A backwards range is a typo, not an instruction to walk the calendar in reverse
-    if (!end || ms(end) < ms(start)) { out.push(start); continue }
+    if (ms(end) < ms(start)) { out.push(start); prev = start; continue }
     for (let t = ms(start); t <= ms(end); t += DAY_MS) out.push(iso(t))
     prev = end
   }
@@ -138,8 +230,18 @@ export function decodeDates(encoded: string | undefined): string[] {
  *
  * @example
  * ```ts
- * const [dates, setDates] = useUrlState('c', datesParam)
+ * const [dates, setDates] = useUrlState('c', datesParam())
  * // ?c=260818-24 → ['2026-08-18', ..., '2026-08-24']
+ *
+ * // With half-open anchors:
+ * const today = () => new Date().toISOString().slice(0, 10)
+ * const [dates, setDates] = useUrlState('c', datesParam({ latest: today }))
+ * // ?c=260818- → Aug 18 through today (resolved on every decode)
  * ```
  */
-export const datesParam: Param<string[]> = { encode: encodeDates, decode: decodeDates }
+export function datesParam(options: DatesParamOptions = {}): Param<string[]> {
+  return {
+    encode: dates => encodeDates(dates, options),
+    decode: encoded => decodeDates(encoded, options),
+  }
+}

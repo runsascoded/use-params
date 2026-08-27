@@ -13,9 +13,13 @@ Type-safe URL-parameter (query and hash) management with minimal, human-readable
 - [Built-in Param Types](#param-types)
 - [Custom Params](#custom)
 - [Batch Updates](#batch)
+- [Multi-key State](#alias)
 - [URL Encoding](#encoding)
 - [Binary Encoding](#binary)
 - [Map / Tuple Params](#tuple)
+- [Tag Filters](#tag-filter)
+- [Flag Packs](#flag-pack)
+- [Date Sets](#dates)
 - [URL Diagnostics](#diagnostics)
 - [Framework-Agnostic Core](#core)
 - [Hash Params](#hash)
@@ -522,7 +526,7 @@ Decode is lenient: unknown letters are silently ignored (they fall under `inspec
 ```typescript
 import { datesParam, useUrlState } from 'use-prms'
 
-const [dates, setDates] = useUrlState('c', datesParam)
+const [dates, setDates] = useUrlState('c', datesParam())
 // ?c=260818-24 → ['2026-08-18', '2026-08-19', ..., '2026-08-24']
 ```
 
@@ -545,7 +549,32 @@ Canonical form is sorted ascending and deduped — a URL is a cache key and a th
 
 The 6-digit `YYMMDD` form hard-codes the 21st century (2000–2099). Dates outside that fall back to the 8-digit form. Values are ISO `YYYY-MM-DD` strings, not `Date`s — round-tripping a *day* through a timestamp invites exactly the local-vs-UTC bug this param exists to avoid.
 
-Also exported as pure functions for use outside React: `encodeDates(dates)` and `decodeDates(encoded)`.
+### Half-open ranges (`latest` / `genesis`)
+
+Pass `latest` or `genesis` to drop the matching end from the URL when a run touches the domain's boundary:
+
+```typescript
+const today = () => new Date().toISOString().slice(0, 10)
+
+const [dates, setDates] = useUrlState('c', datesParam({
+  latest:  today,           // string | (() => string)
+  genesis: '2020-01-01',
+}))
+```
+
+- A run ending at `latest` encodes as `start-` (trailing dash): `?c=260818-` = "Aug 18 through today".
+- A run starting at `genesis` encodes as `-end` (leading dash): `?c=-260824` = "from the beginning through Aug 24".
+- Both are resolved fresh on every encode/decode, so a callback form keeps the URL meaning "through today" as the calendar moves.
+- Single-day selections that land on an anchor still encode as a single date (never `260826-` or `-260826`).
+- A half-open token whose anchor isn't configured decodes to nothing — same lenient contract as any other malformed token.
+
+| Anchor | Dates | URL |
+| ------ | ----- | --- |
+| `latest = 2026-08-24` | Aug 18–24, 2026 | `?c=260818-` |
+| `genesis = 2026-08-18` | Aug 18–24, 2026 | `?c=-24` |
+| both | Aug 1–3, Aug 10, Aug 20–31 | `?c=-03+10+20-` |
+
+Also exported as pure functions for use outside React: `encodeDates(dates, options?)` and `decodeDates(encoded, options?)`.
 
 ## URL Diagnostics <a id="diagnostics"></a>
 
@@ -770,7 +799,7 @@ type MultiParam<T> = {
 | `viewStateParam(opts)` | `Param<ViewState \| null>` | deck.gl camera state; nullable default for "no override" |
 | `tagFilterParam<T>(opts?)` | `Param<Map<T, TagState>>` | Tri-state tag filter (`'in'`/`'out'`/`'off'`) with per-tag defaults; encodes overrides only |
 | `flagPackParam<S>(spec)` | `Param<{[K in keyof S]: boolean}>` | N boolean flags packed into one key (only off-from-default letters listed, in spec-declared order) |
-| `datesParam` | `Param<string[]>` | Set of ISO `YYYY-MM-DD` dates; runs contract to `start-end`, tokens inherit shared leading digits (a week → 9 chars) |
+| `datesParam` | `(options?) => Param<string[]>` | Set of ISO `YYYY-MM-DD` dates; runs contract to `start-end`, tokens inherit shared leading digits (a week → 9 chars); optional `latest`/`genesis` anchors for half-open ranges |
 
 ### Built-in MultiParam Types
 

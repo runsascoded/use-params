@@ -65,7 +65,7 @@ export function Home() {
     },
   })
   const [flags, setFlags] = useUrlState('_', elvisFlagsParam)
-  const [dates, setDates] = useUrlState('dates', datesParam)
+  const [dates, setDates] = useUrlState('dates', datesParam())
 
   return (
     <ParamsDemo
