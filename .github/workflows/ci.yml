@@ -105,6 +105,11 @@ jobs:
     needs: build-and-test
     if: startsWith(github.ref, 'refs/tags/v')
     uses: runsascoded/pnpm-release/.github/workflows/release.yml@v1
+    with:
+      # `pnpm-release`'s OIDC branch installs `npm@latest` (needs npm >= 11.5.1 for
+      # trusted publishing); npm@12 dropped Node 20, so bump the runner past the
+      # reusable workflow's `node_version: 20` default.
+      node_version: '22'
     # Publishes via npm OIDC trusted publishing (configured on npmjs.com), no
     # NPM_TOKEN secret needed. The reusable workflow already grants
     # `id-token: write` on its release job.
